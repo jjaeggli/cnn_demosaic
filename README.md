@@ -26,6 +26,25 @@ I've provided two sample images processed in both RawTherapee using the Markeste
 
 ### Example 1
 
+Fuji X-E2 Sample Image
+
+Markesteijn
+
+![DSCF5657_crop_markesteijn](./assets/DSCF5657_crop_markesteijn.png)
+
+CNN-Demosaic
+
+![DSCF5657_crop_cnn](./assets/DSCF5657_crop_cnn.png)
+
+[download](https://github.com/jjaeggli/cnn_demosaic/raw/refs/heads/main/assets/DSCF5657.exr) processed image  
+[download](https://github.com/jjaeggli/cnn_demosaic/raw/refs/heads/main/assets/DSCF5657.raf) raw image
+
+Credit: Jacob Jaeggli
+
+From the examples above, it is clear there is a significant decrease in false color and linear artifacts in the CNN-Demosaic output versus Markesteijn. There is a more subtle increase in detail, and subjectively a more pleasing and natural appearance. 
+
+### Example 2
+
 Fuji X-T50 Sample Image
 
 Markesteijn
@@ -41,24 +60,6 @@ CNN-Demosaic
 
 Credit: [Mitchell Clark](https://www.dpreview.com/about/staff/mitchell.clark), DP Review.
 
-### Example 2
-
-Fuji X-E2 Sample Image
-
-Markesteijn
-
-![DSCF5657_crop_markesteijn](./assets/DSCF5657_crop_markesteijn.png)
-
-CNN-Demosaic
-
-![DSCF5657_crop_cnn](./assets/DSCF5657_crop_cnn.png)
-
-<!-- [download](./assets/DSCF5657.exr) processed image  
-[download](./assets/DSCF5657.RAF) original -->
-
-Credit: Jacob Jaeggli
-
-From the examples above, it is clear there is a significant decrease in false color and linear artifacts in the CNN-Demosaic output versus Markesteijn. There is a more subtle increase in detail, and subjectively a more pleasing and natural appearance. 
 
 ## Installation
 
