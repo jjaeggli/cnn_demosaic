@@ -56,20 +56,16 @@ CNN-Demosaic
 
 ![DSCF3329_crop_cnn](./assets/DSCF3329_crop_cnn.png)
 
-<<<<<<< Updated upstream
 <!-- [download] processed image  -->
 [original](https://www.dpreview.com/sample-galleries/1737607092/fujifilm-x-t50-sample-gallery/8125134799)
-=======
+
 <!-- [download](./assets/DSCF5657.exr) processed image
 [download](./assets/DSCF5657.RAF) original -->
 >>>>>>> Stashed changes
 
 Credit: [Mitchell Clark](https://www.dpreview.com/about/staff/mitchell.clark), DP Review.
 
-<<<<<<< Updated upstream
-=======
 From the examples above, it is clear there is a significant decrease in false color and linear artifacts in the CNN-Demosaic output versus Markesteijn. There is a more subtle increase in detail, and subjectively a more pleasing and natural appearance.
->>>>>>> Stashed changes
 
 ## Installation
 
