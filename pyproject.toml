@@ -1,0 +1,84 @@
+[build-system]
+# A list of packages that are needed to build your package:
+requires = ["setuptools"]
+# The name of the Python object that frontends will use to perform the build:
+build-backend = "setuptools.build_meta" # If not defined, then legacy behavior can happen.
+
+
+[project]
+name = "cnn_demosaic"
+
+# Versions should comply with PEP 440:
+# https://www.python.org/dev/peps/pep-0440/
+version = "0.0.1"
+
+description = "Demosaicing for X-Trans and Bayer sensors using convolutional neural networks."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+keywords = ["demosaic", "X-Trans", "xtrans", "raw"]
+authors = [{ name = "Jacob A. Jaeggli" }]
+maintainers = [{ name = "Jacob A. Jaeggli" }]
+
+# Classifiers help users find your project by categorizing it.
+# For a list of valid classifiers, see https://pypi.org/classifiers/
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Environment :: Console",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+dependencies = [
+    "tqdm",
+    "numpy",
+    "rawpy>=0.24",
+    "tensorflow[and-cuda]",
+    "Pillow",
+    "pyexr>=0.5",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+dev = ["ruff"]
+
+[project.urls]
+"Homepage" = "https://github.com/jjaeggli/cnn_demosaic"
+"Bug Reports" = "https://github.com/jjaeggli/cnn_demosaic/issues"
+"Say Thanks!" = "http://saythanks.io/to/cnn_demosaic"
+"Source" = "https://github.com/jjaeggli/cnn_demosaic/"
+
+# The following would provide a command line executable called `sample`
+# which executes the function `main` from this package when invoked.
+[project.scripts]
+cnn_demosaic = "cnn_demosaic.process_raw:main"
+
+
+[tool.setuptools]
+# If there are data files included in your packages that need to be
+# installed, specify them here.
+# package-data = { "sample" = ["*.dat"] }
+
+[tool.setuptools.package-data]
+"cnn_demosaic.weights" = ["*.h5"]
+
+[tool.ruff]
+# Exclude a variety of commonly ignored directories.
+
+# Same as Black.
+line-length = 100
+indent-width = 4
+
+# Assume Python 3.9
+target-version = "py39"
