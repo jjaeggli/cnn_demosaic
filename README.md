@@ -44,26 +44,41 @@ Credit: Jacob Jaeggli
 
 From the examples above, it is clear there is a significant decrease in false color and linear artifacts in the CNN-Demosaic output versus Markesteijn. There is a more subtle increase in detail, and subjectively a more pleasing and natural appearance.
 
-### Example 2
-
-Fuji X-T50 Sample Image
-
-Markesteijn
-
-![DSCF3329_crop_markesteijn](./assets/DSCF3329_crop_markesteijn.png)
-
-CNN-Demosaic
-
-![DSCF3329_crop_cnn](./assets/DSCF3329_crop_cnn.png)
-
-[original](https://www.dpreview.com/sample-galleries/1737607092/fujifilm-x-t50-sample-gallery/8125134799)
-
-Credit: [Mitchell Clark](https://www.dpreview.com/about/staff/mitchell.clark), DP Review.
-
-From the examples above, it is clear there is a significant decrease in false color and linear artifacts in the CNN-Demosaic output versus Markesteijn. There is a more subtle increase in detail, and subjectively a more pleasing and natural appearance.
-
 ## Installation
 
 This installation uses Tensorflow and recommends a CUDA compatible GPU.
 
-*Coming Soon!*
+### Installation from source
+
+Clone the repository from GitHub. Create a separate virtualenv for the package to avoid conflicts
+with specific versions of tensorflow or other packages. Additionally, if you use a non-CUDA version
+of tensorflow, you may want to customize package dependencies prior to install.
+
+```
+python -m venv path-for-virtualenv
+source path-for-virtualenv/bin/activate
+```
+
+From the root of the GitHub repository:
+
+```
+pip install .
+```
+
+## Usage
+
+Note: Color conversion is not currently implemented. Color output will be incorrect and not easily
+converted to a color-corrected image.
+
+Images are currently output in the 16-bit floating point OpenEXR format. This provides a great deal
+of flexibility for adjusting the output levels and preserving the dynamic range, as demosaicing is
+a floating point operation, and the image from the sensor typically contains a great deal of
+information beyond what is displayed in a processed image.
+
+To process a single Fuji RAF image, first activate the virtualenv, then call:
+
+```
+cnn_demosaic path/to/image/DSCF0001.RAF
+```
+
+The processed image will be saved to the source image path with the EXR extension.
