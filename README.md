@@ -15,7 +15,7 @@ This approach will be slower than Markesteijn, by at least one order of magnitud
 ## Current Status
 
 - [x] Output as 16-bit floating point OpenEXR images
-- [ ] Output as 16-bit integer PNG images
+- [x] Output as 16-bit integer TIFF images
 - [ ] Proper color-space conversion from *camera RGB* to *sRGB*
 - [ ] Include image metadata in output
 - [ ] Train X-Trans models with noise-augmented images for combined ISO-optimized de-noise and demosaicing

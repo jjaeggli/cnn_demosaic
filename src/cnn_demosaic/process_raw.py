@@ -5,6 +5,7 @@ import logging
 import numpy as np
 import pathlib
 import pyexr
+import tifffile
 import rawpy
 import tensorflow as tf
 
@@ -13,12 +14,14 @@ from cnn_demosaic import model
 from cnn_demosaic import transform
 from importlib import resources
 from tensorflow import keras
-from PIL import Image
 
 
 DEFAULT_WEIGHTS = "x-trans.weights.h5"
-IMG_FORMATS = [".exr", ".png"]
+EXR_FORMAT = "exr"
+TIFF_FORMAT = "tiff"
 EXR_SUFFIX = ".exr"
+TIFF_SUFFIX = ".tiff"
+IMG_FORMATS = {EXR_FORMAT: EXR_SUFFIX, TIFF_FORMAT: TIFF_SUFFIX}
 RAF_SUFFIX = ".raf"
 
 logger = logging.getLogger()
@@ -51,17 +54,52 @@ def process_raw(
 
     # TODO(jjaeggli): Perform color space conversion and other output image operations.
 
-    if output_path.suffix.lower() == ".png":
-        output_arr = (output_arr * 65535).astype(np.uint16)
-        Image.fromarray(output_arr).save(str(output_path), "PNG")
-    elif output_path.suffix.lower() == ".exr":
-        pyexr.write(
-            str(output_path),
-            output_arr,
-            precision=pyexr.HALF,
-        )
+    if output_path.suffix.lower() == EXR_SUFFIX:
+        write_exr(output_arr, output_path)
+    elif output_path.suffix.lower() == TIFF_SUFFIX:
+        write_tiff(output_arr, output_path)
     else:
         raise ValueError(f"The output file type ['{output_path.suffix}'] is not supported.")
+
+
+def write_tiff(output_arr, output_path):
+    output_arr = (output_arr * 65535).astype(np.uint16)
+    tifffile.imwrite(output_path, output_arr, photometric="rgb", compression="zlib")
+
+
+def write_exr(output_arr, output_path):
+    pyexr.write(
+        str(output_path),
+        output_arr,
+        precision=pyexr.HALF,
+    )
+
+
+def get_format_from_str(input_str):
+    format_suffix = IMG_FORMATS.get(input_str.lower().strip("."))
+    if format_suffix is None:
+        raise ValueError(f"Invalid format or unsupported file type specified [{input_str}]")
+    return format_suffix
+
+
+def get_format(format_arg, output_arg):
+    use_format = False
+    format_suffix = None
+    if format_arg is not None:
+        use_format = True
+        format_suffix = get_format_from_str(format_arg)
+    if output_arg is not None:
+        output_path = pathlib.Path(output_arg)
+        output_suffix = output_path.suffix.lower()
+        if not use_format:
+            get_format_from_str(output_suffix)
+        elif output_suffix != format_suffix:
+            raise ValueError(
+                f"Conflict between specified format and output file suffix: [{output_suffix}]"
+            )
+    if format_suffix is None:
+        return IMG_FORMATS[EXR_FORMAT]
+    return format_suffix
 
 
 def main():
@@ -70,6 +108,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-w", "--weights", default=default_weights_path)
     parser.add_argument("-o", "--output", required=False)
+    parser.add_argument("-f", "--format", required=False)
     parser.add_argument("-k", "--fake", required=False, default=False, action="store_true")
     parser.add_argument("raw_filename")
     args = parser.parse_args()
@@ -91,13 +130,13 @@ def main():
     if not "".join(weights_path.suffixes) == ".weights.h5":
         raise ValueError("The weights filename must have the suffix .weights.h5")
 
-    output_path = pathlib.Path(raw_path.with_suffix(EXR_SUFFIX))
+    # Determine the suffix from arguments.
+    format_suffix = get_format(args.format, args.output)
+
+    # Either use the default or specified output path.
+    output_path = pathlib.Path(raw_path.with_suffix(format_suffix))
     if args.output is not None:
         output_path = pathlib.Path(args.output)
-        if output_path.suffix not in IMG_FORMATS:
-            raise ValueError(
-                f"The image filename must be a supported format: [{output_path.suffix}]"
-            )
     if output_path.exists():
         raise ValueError(f"The output filename {output_path.absolute()} already exists!")
 
