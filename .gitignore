@@ -1,3 +1,9 @@
+# Project specific ignores
+notebooks/*.exr
+notebooks/*.tiff
+notebooks/*.pp3
+notebooks/*.h5
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
