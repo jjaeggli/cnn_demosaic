@@ -2,8 +2,6 @@ import numpy as np
 import pyexr
 import tifffile
 
-from typing import Callable
-
 
 EXR_FORMAT = "exr"
 TIFF_FORMAT = "tiff"

@@ -21,7 +21,9 @@ RAF_SUFFIX = ".raf"
 logger = logging.getLogger()
 
 
-def process_raw(raw_path: pathlib.Path, weights_path: pathlib.Path, output_handler, fake=False):
+def process_raw(
+    raw_path: pathlib.Path, weights_path: pathlib.Path, output_handler, fake=False
+):
     """Performs raw image processing on the specified file."""
     with rawpy.imread(str(raw_path)) as raw_img:
         raw_img_array = raw_img.raw_image.astype(np.float32).copy()
@@ -118,7 +120,8 @@ def main():
     logger.debug(f'Processing: ["{raw_path.absolute()}"] => "{output_path.absolute()}"')
 
     def output_handler(output_arr):
-        format_writer(output_arr, output_path)
+        if format_writer is not None:
+            format_writer(output_arr, output_path)
 
     process_raw(raw_path, weights_path, output_handler, fake=args.fake)
 
