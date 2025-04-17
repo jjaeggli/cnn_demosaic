@@ -22,12 +22,12 @@ logger = logging.getLogger()
 
 
 def process_raw(
-    raw_path: pathlib.Path, weights_path: pathlib.Path, output_handler, fake=False
+    raw_path: pathlib.Path, weights_path: pathlib.Path, output_handler, fake=False, crop=False
 ):
     """Performs raw image processing on the specified file."""
     with rawpy.imread(str(raw_path)) as raw_img:
-        raw_img_array = raw_img.raw_image.astype(np.float32).copy()
-
+        raw_img_arr = raw_img.raw_image.astype(np.float32).copy()
+        raw_img_sizes = raw_img.sizes
     loaded_model = None
 
     is_xtrans = raw_path.suffix.lower() == RAF_SUFFIX
@@ -43,12 +43,31 @@ def process_raw(
     per_tile_fn = transform.adj_levels_per_tile_fn
 
     processor = Demosaic(loaded_model, per_tile_fn=per_tile_fn, xtrans=is_xtrans)
-    raw_img_array = transform.normalize_arr(raw_img_array)
-    output_arr = processor.demosaic(raw_img_array)
+    raw_img_arr = transform.normalize_arr(raw_img_arr)
+    output_arr = processor.demosaic(raw_img_arr)
 
     # TODO(jjaeggli): Perform color space conversion and other output image operations.
 
+    if crop:
+        output_arr = crop_image(output_arr, raw_img_sizes)
+
     output_handler(output_arr)
+
+
+def crop_image(img_arr, img_sizes: rawpy.ImageSizes):
+    # Add offsets to match JPG output image. 4896 x 3264
+    # col_offset = 19
+    # row_offset = 16
+    # width_override = 4896
+    # height_override = 3264
+    col_start = img_sizes.left_margin
+    col_end = col_start + img_sizes.width
+    row_start = img_sizes.top_margin
+    row_end = row_start + img_sizes.height
+    logger.debug(
+        "Cropping image array to dimensions [%s:%s,%s:%s]", (row_start, row_end, col_start, col_end)
+    )
+    return img_arr[row_start:row_end, col_start:col_end]
 
 
 def get_format_from_str(input_str):
@@ -87,6 +106,7 @@ def main():
     parser.add_argument("-o", "--output", required=False)
     parser.add_argument("-f", "--format", required=False)
     parser.add_argument("-k", "--fake", required=False, default=False, action="store_true")
+    parser.add_argument("-c", "--crop", required=False, default=False, action="store_true")
     parser.add_argument("raw_filename")
     args = parser.parse_args()
 
@@ -123,7 +143,7 @@ def main():
         if format_writer is not None:
             format_writer(output_arr, output_path)
 
-    process_raw(raw_path, weights_path, output_handler, fake=args.fake)
+    process_raw(raw_path, weights_path, output_handler, fake=args.fake, crop=args.crop)
 
 
 if __name__ == "__main__":

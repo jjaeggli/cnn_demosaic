@@ -44,9 +44,9 @@ def s_curve(image_array: np.ndarray, midpoint=0.5, slope=1.0, contrast=1.0):
     """Applies an s-curve function the the array."""
     if not isinstance(image_array, np.ndarray):
         raise ValueError("Input must be a NumPy array.")
-    image_array = np.clip(image_array, 0, 1)
-    image_array = (image_array - midpoint) * contrast
-    output_array = 1 / (1 + np.exp(-slope * image_array))
+    output_array = (image_array - midpoint) * contrast
+    output_array = 1 / (1 + np.exp(-slope * output_array))
+    output_array = np.clip(output_array, 0, 1)
     return output_array
 
 
