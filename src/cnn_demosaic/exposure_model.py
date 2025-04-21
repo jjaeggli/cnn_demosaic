@@ -2,12 +2,14 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
+HIST_SIZE = 32
+DENSE_LAYERS = 16
 
 class LogNormalizationLayer(layers.Layer):
     def __init__(self, axis=1, epsilon=1e-6, **kwargs):
         super(LogNormalizationLayer, self).__init__(**kwargs)
-        self.axis=axis
-        self.epsilon=epsilon
+        self.axis = axis
+        self.epsilon = epsilon
 
     def build(self, input_shape):
         self.input_shape = input_shape
@@ -22,17 +24,19 @@ class LogNormalizationLayer(layers.Layer):
 
     def get_config(self):
         config = super(LogNormalizationLayer, self).get_config()
-        config.update({
-            'axis': self.axis,
-            'epsilon': self.epsilon,
-        })
+        config.update(
+            {
+                "axis": self.axis,
+                "epsilon": self.epsilon,
+            }
+        )
         return config
 
     def compute_output_shape(self, input_shape):
         return input_shape
 
 
-def processing_parameters_model(hist_size=32, dense_layers=8):
+def exposure_params_model(hist_size=HIST_SIZE, dense_layers=DENSE_LAYERS):
     """A model which generates processing parameters based on a histogram."""
 
     y_hist = keras.Input(shape=(hist_size,), name="y_hist")
@@ -61,3 +65,17 @@ def processing_parameters_model(hist_size=32, dense_layers=8):
     model = keras.Model(inputs=[y_hist], outputs=[levels_weights, gamma_weights, curve_weights])
 
     return model
+
+
+def create_exposure_model(weights_path=None):
+    processing_model = exposure_params_model()
+    processing_model.compile(
+        optimizer=keras.optimizers.Adam(),
+        loss="mse",
+        metrics=["accuracy"],
+    )
+
+    if weights_path is not None:
+        processing_model.load_weights(weights_path)
+
+    return processing_model

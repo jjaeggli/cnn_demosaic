@@ -7,7 +7,9 @@ import pathlib
 import rawpy
 import tensorflow as tf
 
+from cnn_demosaic import exposure_model
 from cnn_demosaic.demosaic import Demosaic
+from cnn_demosaic.exposure import Exposure
 from cnn_demosaic import model
 from cnn_demosaic import output
 from cnn_demosaic import transform
@@ -15,14 +17,21 @@ from importlib import resources
 from tensorflow import keras
 
 
+WEIGHTS_MODULE = "cnn_demosaic.weights"
 DEFAULT_WEIGHTS = "x-trans.weights.h5"
+EXPOSURE_WEIGHTS = "exposure.weights.h5"
 RAF_SUFFIX = ".raf"
 
 logger = logging.getLogger()
 
 
 def process_raw(
-    raw_path: pathlib.Path, weights_path: pathlib.Path, output_handler, fake=False, crop=False
+    raw_path: pathlib.Path,
+    weights_path: pathlib.Path,
+    exposure_weights_path: pathlib.Path,
+    output_handler,
+    fake=False,
+    crop=False,
 ):
     """Performs raw image processing on the specified file."""
     with rawpy.imread(str(raw_path)) as raw_img:
@@ -40,13 +49,20 @@ def process_raw(
     else:
         loaded_model = model.create_32_64_32_model(weights_path)
 
+    exp_model = exposure_model.create_exposure_model(exposure_weights_path)
+
+    exposure = Exposure(exp_model)
+
     per_tile_fn = transform.adj_levels_per_tile_fn
 
     processor = Demosaic(loaded_model, per_tile_fn=per_tile_fn, xtrans=is_xtrans)
     raw_img_arr = transform.normalize_arr(raw_img_arr)
     output_arr = processor.demosaic(raw_img_arr)
+    output_arr = exposure.process(output_arr)
 
     # TODO(jjaeggli): Perform color space conversion and other output image operations.
+
+    output_arr = np.asarray(output_arr, dtype=np.float32)
 
     if crop:
         output_arr = crop_image(output_arr, raw_img_sizes)
@@ -55,6 +71,7 @@ def process_raw(
 
 
 def crop_image(img_arr, img_sizes: rawpy.ImageSizes):
+    # TODO(jjaeggli): Move these parameters to an argument.
     # Add offsets to match JPG output image. 4896 x 3264
     # col_offset = 19
     # row_offset = 16
@@ -99,7 +116,7 @@ def get_format(format_arg, output_arg):
 
 
 def main():
-    default_weights_path = resources.files("cnn_demosaic.weights").joinpath(DEFAULT_WEIGHTS)
+    default_weights_path = resources.files(WEIGHTS_MODULE).joinpath(DEFAULT_WEIGHTS)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-w", "--weights", default=default_weights_path)
@@ -127,6 +144,10 @@ def main():
     if not "".join(weights_path.suffixes) == ".weights.h5":
         raise ValueError("The weights filename must have the suffix .weights.h5")
 
+    exposure_weights_path = pathlib.Path(resources.files(WEIGHTS_MODULE).joinpath(EXPOSURE_WEIGHTS))
+    if not exposure_weights_path.is_file():
+        raise ValueError(f"The exposure weights filename {exposure_weights_path} is not a file!")
+
     # Determine the suffix from arguments.
     format_suffix, format_writer = get_format(args.format, args.output)
 
@@ -143,7 +164,14 @@ def main():
         if format_writer is not None:
             format_writer(output_arr, output_path)
 
-    process_raw(raw_path, weights_path, output_handler, fake=args.fake, crop=args.crop)
+    process_raw(
+        raw_path,
+        weights_path,
+        exposure_weights_path,
+        output_handler,
+        fake=args.fake,
+        crop=args.crop,
+    )
 
 
 if __name__ == "__main__":

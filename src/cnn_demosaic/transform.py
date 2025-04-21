@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 
 
 def normalize_arr(array_input):
@@ -54,3 +55,27 @@ def gamma(image, gamma=1.0):
     if gamma <= 0:
         raise ValueError("Gamma must be greater than zero")
     return np.power(image, gamma)
+
+
+@tf.function()
+def tf_rgb_luma_fn(rgb_ch):
+    # Convert the image to a luma channel using the following ratios:
+    # 0.299R + 0.587G + 0.114B
+    return rgb_ch[:, 0] * 0.299 + rgb_ch[:, 1] * 0.587 + rgb_ch[:, 2] * 0.114
+
+
+@tf.function()
+def tf_s_curve_fn(img_arr, offset, contrast, slope):
+    """Applies the s-curve function in a TensorFlow context."""
+    output = (img_arr + offset) * contrast
+    return 1 / (1 + tf.math.exp(slope * output))
+
+
+@tf.function()
+def tf_levels_fn(img_arr, in_min, in_max):
+    """Applies the levels function in a TensorFlow context."""
+    dyn_range = in_max - in_min
+    dyn_range = dyn_range + 1e-6
+
+    scale_ratio = 1.0 / dyn_range
+    return (img_arr - in_min) * scale_ratio
