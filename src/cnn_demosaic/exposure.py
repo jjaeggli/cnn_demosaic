@@ -25,9 +25,20 @@ class Exposure:
         levels, gamma, curve = self.model.predict(img_hist)
 
         # Apply the processing params.
-        output_arr = tf.pow(img_arr, *gamma[0])
-        output_arr = transform.tf_levels_fn(output_arr, levels[0][0], levels[0][1])
-        output_arr = transform.tf_s_curve_fn(output_arr, *curve[0])
+        output_arr = self.apply_parameters(img_arr, levels[0], gamma[0], curve[0])
         output_arr = tf.reshape(output_arr, orig_shape)
+        return output_arr
 
+    def apply_parameters(self, img_arr, levels, gamma, curve):
+        """
+        Applies the parameters returned by the levels model.
+
+        Args:
+            gamma: Gamma exponent
+            levels: Tuple (min level, max level)
+            curve: Tuple (offset, contrast, slope)
+        """
+        output_arr = tf.pow(img_arr, gamma)
+        output_arr = transform.tf_levels_fn(output_arr, *levels)
+        output_arr = transform.tf_s_curve_fn(output_arr, *curve)
         return output_arr
