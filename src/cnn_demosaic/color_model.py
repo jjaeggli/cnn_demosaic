@@ -5,6 +5,8 @@ from cnn_demosaic import transform
 from tensorflow import keras
 from tensorflow.keras import layers
 
+from cnn_demosaic.model import create_model
+
 
 srgb_to_xyz = np.array(
     [
@@ -56,10 +58,7 @@ class MultiColorTransformLayer(layers.Layer):
         def apply_fn(inputs):
             return tf.tensordot(inputs, self.w, 1)
 
-        return tf.map_fn(
-            apply_fn,
-            inputs
-        )
+        return tf.map_fn(apply_fn, inputs)
 
     def compute_output_shape(self, input_shape):
         return input_shape
@@ -88,7 +87,7 @@ class ColorCurveAdjLayer(layers.Layer):
         return input_shape
 
 
-def wb_model():
+def white_balance_model():
     wb_input = keras.Input(shape=(3,), name="wb_input")
 
     # Apply a set of weights to the white balance. The first white balance weights
@@ -140,7 +139,7 @@ def create_composite_model():
     rgb_input = layers.Lambda(lambda x: x[:, 0:3])(merged_input)
     wb_input = layers.Lambda(lambda x: x[:, 3:])(merged_input)
 
-    wb_transform_0, wb_transform_1 = wb_model()(wb_input)
+    wb_transform_0, wb_transform_1 = white_balance_model()(wb_input)
 
     rgb_layers = layers.Identity()(rgb_input)
 
@@ -208,15 +207,49 @@ def create_color_model():
     return model
 
 
-def build_color_model(weights_path=None):
-    processing_model = create_color_model()
-    processing_model.compile(
+def build_color_model(weights_path=None, trainable=False):
+    model = create_color_model()
+    model.compile(
         optimizer=keras.optimizers.Adam(),
         loss="mse",
         metrics=["accuracy"],
     )
 
     if weights_path is not None:
-        processing_model.load_weights(weights_path)
+        model.load_weights(weights_path)
 
-    return processing_model
+    model.trainable = False
+
+    return model
+
+
+def create_color_transform_model(weights_path=None, trainable=False):
+    model = color_transform_model()
+    model.compile(
+        optimizer=keras.optimizers.Adam(),
+        loss="mse",
+        metrics=["accuracy"],
+    )
+
+    if weights_path is not None:
+        model.load_weights(weights_path)
+
+    model.trainable = trainable
+
+    return model
+
+
+def create_white_balance_model(weights_path=None, trainable=False):
+    model = white_balance_model()
+    model.compile(
+        optimizer=keras.optimizers.Adam(),
+        loss="mse",
+        metrics=["accuracy"],
+    )
+
+    if weights_path is not None:
+        model.load_weights(weights_path)
+
+    model.trainable = trainable
+
+    return model

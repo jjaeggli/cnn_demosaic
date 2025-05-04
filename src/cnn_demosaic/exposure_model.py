@@ -5,6 +5,7 @@ from tensorflow.keras import layers
 HIST_SIZE = 32
 DENSE_LAYERS = 16
 
+
 class LogNormalizationLayer(layers.Layer):
     def __init__(self, axis=1, epsilon=1e-6, **kwargs):
         super(LogNormalizationLayer, self).__init__(**kwargs)
