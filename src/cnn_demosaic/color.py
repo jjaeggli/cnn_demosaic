@@ -3,11 +3,14 @@
 import numpy as np
 import tensorflow as tf
 
+from cnn_demosaic.profile import profile
+
 
 class Color:
     def __init__(self, model):
         self.model = model
 
+    @profile()
     def process(self, img_arr, wb_matrix):
         orig_shape = img_arr.shape
         # Compute the histogram.
@@ -21,7 +24,7 @@ class Color:
 
         wb_matrix_full = np.full_like(img_linear_arr, wb_matrix)
         process_arr = np.concatenate((img_linear_arr, wb_matrix_full), axis=1)
-        output_arr = self.model.predict(process_arr, batch_size=8192)
+        output_arr = self.model.predict(process_arr, batch_size=8192, verbose=0)
         return tf.reshape(output_arr, orig_shape)
 
 
@@ -29,6 +32,7 @@ class WhiteBalance:
     def __init__(self, model):
         self.model = model
 
+    @profile()
     def process(self, img_arr, wb_matrix):
         orig_shape = img_arr.shape
         img_linear_arr = None
@@ -43,7 +47,9 @@ class WhiteBalance:
         else:
             raise ValueError(f"Invalid input image shape: {orig_shape}")
 
-        params_add, params_mult = self.model.predict(wb_matrix)
+        wb_matrix = wb_matrix.reshape((1, 3))
+
+        params_add, params_mult = self.model.predict(wb_matrix, verbose=0)
 
         output_arr = (img_linear_arr + params_add) * params_mult
 
@@ -54,6 +60,7 @@ class ColorTransform:
     def __init__(self, model):
         self.model = model
 
+    @profile()
     def process(self, img_arr):
         orig_shape = img_arr.shape
         img_linear_arr = None
@@ -67,6 +74,6 @@ class ColorTransform:
         else:
             raise ValueError(f"Invalid input image shape: {orig_shape}")
 
-        output_arr = self.model.predict(img_linear_arr)
+        output_arr = self.model.predict(img_linear_arr, batch_size=8192, verbose=0)
 
         return tf.reshape(output_arr, orig_shape)

@@ -2,6 +2,7 @@
 
 import numpy as np
 from tqdm import tqdm
+from cnn_demosaic.profile import profile
 
 # TODO(jjaeggli): add progress callback for UI.
 # TODO(jjaeggli): add debug logging using a logging handler.
@@ -24,6 +25,7 @@ class Demosaic:
             self.tile_size = 32
             self.margin = 2
 
+    @profile()
     def demosaic(self, img_array):
         # Computed tile width
         m = self.margin
@@ -109,7 +111,7 @@ class Demosaic:
             tiles = np.array(tiles)
 
             # Do our thing.
-            output = self.model.predict(tiles)
+            output = self.model.predict(tiles, verbose=0)
 
             # Out row start coordinate is relative to the non-padded image.
             # row_start is relative to the padded image. So compensating for

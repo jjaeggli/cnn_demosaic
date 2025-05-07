@@ -11,7 +11,7 @@ import tensorflow as tf
 from cnn_demosaic import color_model
 from cnn_demosaic import config
 from cnn_demosaic import exposure_model
-from cnn_demosaic.color import Color
+from cnn_demosaic.color import Color, WhiteBalance, ColorTransform
 from cnn_demosaic.demosaic import Demosaic
 from cnn_demosaic.exposure import Exposure
 from cnn_demosaic import model
@@ -27,12 +27,21 @@ EXPOSURE_WEIGHTS = "exposure.weights.h5"
 COLOR_WEIGHTS = "color.weights.h5"
 RAF_SUFFIX = ".raf"
 
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    # format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    # You could explicitly specify stream=sys.stdout if absolutely needed for stdout,
+    # but sys.stderr is the logging standard for messages.
+    # stream=sys.stdout
+)
+
 logger = logging.getLogger()
 
 
-def process_raw(processing_config: config.Config):
+def process_raw(cfg: config.Config):
     """Performs raw image processing on the specified file."""
-    raw_path = processing_config.raw_path
+    raw_path = cfg.raw_path
 
     with rawpy.imread(str(raw_path)) as raw_img:
         raw_img_arr = raw_img.raw_image.astype(np.float32).copy()
@@ -46,25 +55,19 @@ def process_raw(processing_config: config.Config):
     wb_scale = math.fsum(daylight_whitebalance) / math.fsum(camera_whitebalance)
     wb_matrix = np.asarray(camera_whitebalance)[:3] * wb_scale
 
-    demosaic_weights_path = processing_config.demosaic_weights_path
+    demosaic_weights_path = cfg.demosaic_weights_path
 
     # TODO(jjaeggli): Actually look at the sensor format to determine which sensor
     #   format should be used.
     is_xtrans = raw_path.suffix.lower() == RAF_SUFFIX
 
     if is_xtrans:
-        if processing_config.fake:
+        if cfg.fake:
             loaded_model = model.create_fake_xtrans_model(demosaic_weights_path)
         else:
             loaded_model = model.create_xtrans_model(demosaic_weights_path)
     else:
         loaded_model = model.create_32_64_32_model(demosaic_weights_path)
-
-    exp_model = exposure_model.create_exposure_model(processing_config.exposure_weights_path)
-    exposure = Exposure(exp_model)
-
-    c_model = color_model.build_color_model(processing_config.color_weights_path)
-    color = Color(c_model)
 
     per_tile_fn = transform.adj_levels_per_tile_fn
 
@@ -72,34 +75,58 @@ def process_raw(processing_config: config.Config):
     raw_img_arr = transform.normalize_arr(raw_img_arr)
     output_arr = processor.demosaic(raw_img_arr)
 
-    if processing_config.post_process:
-        logger.info("Performing post-processing.")
-        output_arr = exposure.process(output_arr)
-        output_arr = color.process(output_arr, wb_matrix)
+    if cfg.post_process:
+        output_arr = post_process(output_arr, wb_matrix, cfg)
 
     output_arr = np.asarray(output_arr, dtype=np.float32)
 
-    if processing_config.crop:
+    if cfg.crop:
         output_arr = crop_image(output_arr, raw_img_sizes)
 
-    processing_config.output_handler(output_arr)
+    cfg.output_handler(output_arr)
+
+
+def post_process(img_arr, wb_matrix, cfg: config.Config):
+    exp_model = exposure_model.create_exposure_model(cfg.exposure_weights_path)
+    exposure = Exposure(exp_model)
+
+    wb_model = color_model.create_white_balance_model(cfg.white_balance_weights_path)
+    white_balance = WhiteBalance(wb_model)
+
+    # c_model = color_model.build_color_model(cfg.color_weights_path)
+    # color = Color(c_model)
+
+    ct_model = color_model.create_color_transform_model(cfg.color_weights_path)
+    color_transform = ColorTransform(ct_model)
+
+    logger.info("Performing post-processing.")
+    output_arr = exposure.process(img_arr)
+    output_arr = white_balance.process(output_arr, wb_matrix)
+    output_arr = color_transform.process(output_arr)
+
+    return output_arr
 
 
 def crop_image(img_arr, img_sizes: rawpy.ImageSizes):
-    # TODO(jjaeggli): Move these parameters to an argument.
-    # Add offsets to match JPG output image. 4896 x 3264
+    height = img_sizes.height
+    width = img_sizes.width
+    col_start = img_sizes.left_margin
+    col_end = col_start + width
+    row_start = img_sizes.top_margin
+    row_end = row_start + height
+    logger.debug(
+        "Cropping image array to dimensions: [%s+%s,%s+%s]", row_start, width, col_start, height
+    )
+    return img_arr[row_start:row_end, col_start:col_end]
+
+
+def crop_image_xe2_jpeg(img_arr, img_sizes: rawpy.ImageSizes):
     col_offset = 19
     row_offset = 16
-    width_override = 4896
-    height_override = 3264
     col_start = img_sizes.left_margin + col_offset
-    col_end = col_start + width_override
+    col_end = col_start + 4896
     row_start = img_sizes.top_margin + row_offset
-    row_end = row_start + height_override
-    # col_start = img_sizes.left_margin
-    # col_end = col_start + img_sizes.width
-    # row_start = img_sizes.top_margin
-    # row_end = row_start + img_sizes.height
+    row_end = row_start + 3264
     logger.debug(
         "Cropping image array to dimensions [%s:%s,%s:%s]", (row_start, row_end, col_start, col_end)
     )
@@ -149,5 +176,5 @@ def main():
 
 
 if __name__ == "__main__":
-    logger.setLevel(logging.WARN)
+    # logger.setLevel(logging.DEBUG)
     main()

@@ -7,6 +7,7 @@ WEIGHTS_MODULE = "cnn_demosaic.weights"
 DEMOSAIC_WEIGHTS = "x-trans.weights.h5"
 EXPOSURE_WEIGHTS = "exposure.weights.h5"
 COLOR_WEIGHTS = "color.weights.h5"
+COLOR_TRANSFORM_WEIGHTS = "color_transform.weights.h5"
 WHITE_BALANCE_WEIGHTS = "white_balance.weights.h5"
 
 
@@ -27,13 +28,15 @@ class Config:
     def __post_init__(self):
         self.raw_path = Path(self.raw_filename)
 
+        self._extension, self._format_writer = get_format(self.format, self.output_filename)
+
     @property
     def demosaic_weights_path(self):
         return get_weights_resource_path(self.demosaic_weights, DEMOSAIC_WEIGHTS)
 
     @property
     def color_weights_path(self):
-        return get_weights_resource_path(self.color_weights, COLOR_WEIGHTS)
+        return get_weights_resource_path(self.color_weights, COLOR_TRANSFORM_WEIGHTS)
 
     @property
     def exposure_weights_path(self):
@@ -45,7 +48,7 @@ class Config:
 
     @property
     def output_suffix(self):
-        return ".exr"
+        return self._extension
 
     @property
     def output_path(self) -> Path:
@@ -74,12 +77,10 @@ class Config:
     def output_handler(self):
         # TODO(jjaeggli): Output handler should be able to encompas a number of different
         #   things, such as a bitstream output handler.
-        # Determine the suffix from arguments.
-        _, format_writer = get_format(self.format, self.output_filename)
 
         def output_handler(output_arr):
-            if format_writer is not None:
-                format_writer(output_arr, self.output_path)
+            if self._format_writer is not None:
+                self._format_writer(output_arr, self.output_path)
 
         return output_handler
 
