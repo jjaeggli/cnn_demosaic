@@ -28,14 +28,7 @@ COLOR_WEIGHTS = "color.weights.h5"
 RAF_SUFFIX = ".raf"
 
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    # format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    # You could explicitly specify stream=sys.stdout if absolutely needed for stdout,
-    # but sys.stderr is the logging standard for messages.
-    # stream=sys.stdout
-)
-
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
 
 
@@ -93,9 +86,6 @@ def post_process(img_arr, wb_matrix, cfg: config.Config):
     wb_model = color_model.create_white_balance_model(cfg.white_balance_weights_path)
     white_balance = WhiteBalance(wb_model)
 
-    # c_model = color_model.build_color_model(cfg.color_weights_path)
-    # color = Color(c_model)
-
     ct_model = color_model.create_color_transform_model(cfg.color_weights_path)
     color_transform = ColorTransform(ct_model)
 
@@ -123,12 +113,14 @@ def crop_image(img_arr, img_sizes: rawpy.ImageSizes):
 def crop_image_xe2_jpeg(img_arr, img_sizes: rawpy.ImageSizes):
     col_offset = 19
     row_offset = 16
+    width = 4896
+    height = 3264
     col_start = img_sizes.left_margin + col_offset
-    col_end = col_start + 4896
+    col_end = col_start + width
     row_start = img_sizes.top_margin + row_offset
-    row_end = row_start + 3264
+    row_end = row_start + height
     logger.debug(
-        "Cropping image array to dimensions [%s:%s,%s:%s]", (row_start, row_end, col_start, col_end)
+        "Cropping image array to dimensions: [%s+%s,%s+%s]", row_start, width, col_start, height
     )
     return img_arr[row_start:row_end, col_start:col_end]
 
@@ -176,5 +168,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # logger.setLevel(logging.DEBUG)
     main()
