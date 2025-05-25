@@ -25,8 +25,8 @@ COLOR_MODELS = {
 
 def get_exposure_processor():
     if "exp" not in st.session_state:
-        model_path = config.get_weights_resource_path(None, config.EXPOSURE_WEIGHTS)
-        exp_model = exposure_model.create_exposure_model()
+        weights_path = config.get_weights_resource_path(None, config.EXPOSURE_WEIGHTS)
+        exp_model = exposure_model.create_exposure_model(weights_path)
         exp = exposure.Exposure(exp_model)
         st.session_state["exp"] = exp
         return exp
@@ -53,6 +53,23 @@ def apply_exposure(img_arr, levels, gamma, curve):
 def auto_button_click():
     pass
     # TODO(jjaeggli): Reset levels to auto-level parameters.
+
+
+def get_color_processor(model_key):
+    session_key = f"col_{model_key}"
+    if session_key not in st.session_state:
+        weights_path = config.get_weights_resource_path(None, COLOR_MODELS[model_key])
+        col_model = color_model.create_color_transform_model(weights_path)
+        col = color.ColorTransform(col_model)
+        st.session_state[session_key] = col
+        return col
+    else:
+        return st.session_state[session_key]
+
+
+def apply_color_model(img_tensor, model_key):
+    col = get_color_processor(model_key)
+    return col.process(img_tensor)
 
 
 def main_app():
@@ -89,23 +106,34 @@ def main_app():
         use_container_width=False,
     )
 
-    predict_exposure(st.session_state["thumbnail_base"])
+    # predict_exposure(st.session_state["thumbnail_base"])
+
+    if "exp_gamma" not in st.session_state:
+        st.session_state["exp_levels"] = (0.0, 1.0)
+        st.session_state["exp_gamma"] = 0.8
+        st.session_state["exp_curve"] = (1.2, 1.3, 1.4)
 
     gamma_default = 1.0
 
-    if "exp_gamma" in st.session_state:
-        gamma_default = st.session_state["exp_gamma"]
-        if gamma_default < 0.0:
-            gamma_default = 0.0
-        curve = st.session_state["exp_curve"]
+    exp_gamma = st.session_state.exp_gamma
+    exp_black, exp_white = st.session_state.exp_levels
+    exp_contrast, exp_slope, exp_shift = st.session_state.exp_curve
 
-    gamma = st.slider("Gamma", 0.0, 3.0, gamma_default, step=0.1)
+    black_level = st.slider("Black Level", 0.0, 1.0, exp_black, step=0.001)
+    white_level = st.slider("White Level", 0.0, 1.0, exp_white, step=0.001)
 
-    contrast = st.slider("Contrast", 0.0, 10.0, 1.2, step=0.1)
+    gamma = st.slider("Gamma", 0.0, 3.0, exp_gamma, step=0.01)
+    contrast = st.slider("Contrast", 0.0, 10.0, exp_contrast, step=0.01)
+    slope = st.slider("Slope", 0.0, 10.0, exp_slope, step=0.01)
+    shift = st.slider("Shift", 0.0, 10.0, exp_shift, step=0.01)
 
-    slope = st.slider("Slope", 0.0, 10.0, 1.3, step=0.1)
+    exp_tensor = apply_exposure(
+        st.session_state.thumbnail_base, (white_level, black_level), gamma, (contrast, slope, shift)
+    )
 
-    shift = st.slider("Shift", 0.0, 10.0, 1.4, step=0.1)
+    exp_thumbnail = np.asarray(exp_tensor)
+
+    st.image(exp_thumbnail, use_container_width=True)
 
     # TODO(jjaeggli): Apply the levels to the base thumbnail, and display the luma channel.
 
@@ -119,7 +147,7 @@ def main_app():
             key="selectbox_color1",  # Unique key for the widget
         )
         color1_rgb = COLOR_MODELS[color1_name]
-        curr_image1_np = st.session_state.thumbnail_base
+        curr_image1_np = np.asarray(apply_color_model(exp_tensor, color1_name))
         st.image(curr_image1_np, caption="Image 1", use_container_width=True)
 
     with col2:
@@ -131,7 +159,7 @@ def main_app():
         )
 
         color2_rgb = COLOR_MODELS[color2_name]
-        curr_image2_np = st.session_state.thumbnail_base
+        curr_image2_np = np.asarray(apply_color_model(exp_tensor, color2_name))
         st.image(curr_image2_np, caption="Image 2", use_container_width=True)
 
     st.subheader("Blending Control")
