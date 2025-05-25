@@ -43,7 +43,9 @@ classifiers = [
 dependencies = [
     "tqdm",
     "numpy",
+    "opencv-python",
     "rawpy>=0.24",
+    "streamlit",
     "tensorflow[and-cuda]",
     "Pillow",
     "pyexr>=0.5",
