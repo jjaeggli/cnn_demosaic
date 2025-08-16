@@ -90,7 +90,7 @@ class FakeModel:
     def __init__(self, output_shape=(32, 32, 3)):
         self.output_shape = output_shape
 
-    def predict(self, tiles):
+    def predict(self, tiles, verbose=False):
         output_array = np.asarray([np.random.random(self.output_shape) for _ in tiles])
         return output_array
 

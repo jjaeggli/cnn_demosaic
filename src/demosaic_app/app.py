@@ -1,16 +1,14 @@
 # Application which allows adjusting the processing parameters of an image.
 
-from cnn_demosaic.process_raw import EXPOSURE_WEIGHTS
-import streamlit as st
 import numpy as np
 import pyexr
+import streamlit as st
 
-from cnn_demosaic import color_model
 from cnn_demosaic import color
+from cnn_demosaic import color_model
 from cnn_demosaic import config
-from cnn_demosaic import exposure_model
 from cnn_demosaic import exposure
-from cnn_demosaic import transform
+from cnn_demosaic import exposure_model
 from demosaic_app import operations
 
 # TODO(jjaeggli): Add file chooser control and remove hardcoded value.
@@ -45,9 +43,9 @@ def predict_exposure(exr_img):
     st.session_state["exp_curve"] = curve[0]
 
 
-def apply_exposure(img_arr, levels, gamma, curve):
+def apply_exposure(img_arr, params: exposure.ExposureParameters):
     exp = get_exposure_processor()
-    return exp.apply_parameters(img_arr, levels, gamma, curve)
+    return exp.apply_parameters(img_arr, params)
 
 
 def auto_button_click():
@@ -113,7 +111,7 @@ def main_app():
         st.session_state["exp_gamma"] = 0.8
         st.session_state["exp_curve"] = (1.2, 1.3, 1.4)
 
-    gamma_default = 1.0
+    # gamma_default = 1.0
 
     exp_gamma = st.session_state.exp_gamma
     exp_black, exp_white = st.session_state.exp_levels
@@ -127,9 +125,17 @@ def main_app():
     slope = st.slider("Slope", 0.0, 10.0, exp_slope, step=0.01)
     shift = st.slider("Shift", 0.0, 10.0, exp_shift, step=0.01)
 
-    exp_tensor = apply_exposure(
-        st.session_state.thumbnail_base, (white_level, black_level), gamma, (contrast, slope, shift)
+    # Create ExposureParameters object from slider values
+    exposure_params = exposure.ExposureParameters(
+        black_level=black_level,
+        white_level=white_level,
+        gamma=gamma,
+        contrast=contrast,
+        slope=slope,
+        shift=shift
     )
+
+    exp_tensor = apply_exposure(st.session_state.thumbnail_base, exposure_params)
 
     exp_thumbnail = np.asarray(exp_tensor)
 

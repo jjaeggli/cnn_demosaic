@@ -23,6 +23,7 @@ class Config:
     crop: bool = True
     jpeg_crop: bool = False
     post_process: bool = True
+    monochrome: bool = False
     fake: bool = False
 
     def __post_init__(self):

@@ -1,9 +1,20 @@
 # Module for correcting exposure / luminance signal in the raw image.
 
 import tensorflow as tf
+from dataclasses import dataclass
 
 from cnn_demosaic import transform
 from cnn_demosaic.profile import profile
+
+
+@dataclass
+class ExposureParameters:
+    black_level: float
+    white_level: float
+    gamma: float
+    contrast: float
+    slope: float
+    shift: float
 
 
 class Exposure:
@@ -24,7 +35,15 @@ class Exposure:
         levels, gamma, curve = self.get_processing_params(img_arr)
 
         # Apply the processing params.
-        output_arr = self.apply_parameters(img_arr, levels[0], gamma[0], curve[0])
+        params = ExposureParameters(
+            black_level=levels[0][0],
+            white_level=levels[0][1],
+            gamma=gamma[0][0],
+            contrast=curve[0][0],
+            slope=curve[0][1],
+            shift=curve[0][2]
+        )
+        output_arr = self.apply_parameters(img_arr, params)
         output_arr = tf.reshape(output_arr, orig_shape)
         return output_arr
 
@@ -37,16 +56,15 @@ class Exposure:
         return self.model.predict(img_hist, verbose=0)
 
     @profile()
-    def apply_parameters(self, img_arr, levels, gamma, curve):
+    def apply_parameters(self, img_arr, params: ExposureParameters):
         """
         Applies the parameters returned by the levels model.
 
         Args:
-            gamma: Gamma exponent
-            levels: Tuple (min level, max level)
-            curve: Tuple (offset, contrast, slope)
+            params: An instance of ExposureParameters containing black_level, white_level,
+                    gamma, contrast, slope, and shift.
         """
-        output_arr = tf.pow(img_arr, gamma)
-        output_arr = transform.tf_levels_fn(output_arr, *levels)
-        output_arr = transform.tf_s_curve_fn(output_arr, *curve)
+        output_arr = tf.pow(img_arr, params.gamma)
+        output_arr = transform.tf_levels_fn(output_arr, params.white_level, params.black_level)
+        output_arr = transform.tf_s_curve_fn(output_arr, params.contrast, params.slope, params.shift)
         return output_arr

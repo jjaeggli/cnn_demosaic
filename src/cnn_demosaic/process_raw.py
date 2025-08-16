@@ -11,7 +11,7 @@ import tensorflow as tf
 from cnn_demosaic import color_model
 from cnn_demosaic import config
 from cnn_demosaic import exposure_model
-from cnn_demosaic.color import Color, WhiteBalance, ColorTransform
+from cnn_demosaic.color import WhiteBalance, ColorTransform, MonochromeTransform
 from cnn_demosaic.demosaic import Demosaic
 from cnn_demosaic.exposure import Exposure
 from cnn_demosaic import model
@@ -69,7 +69,10 @@ def process_raw(cfg: config.Config):
     output_arr = processor.demosaic(raw_img_arr)
 
     if cfg.post_process:
-        output_arr = post_process(output_arr, wb_matrix, cfg)
+        if cfg.monochrome:
+            output_arr = post_process_bw(output_arr, cfg)
+        else:
+            output_arr = post_process(output_arr, wb_matrix, cfg)
 
     output_arr = np.asarray(output_arr, dtype=np.float32)
 
@@ -96,6 +99,20 @@ def post_process(img_arr, wb_matrix, cfg: config.Config):
 
     return output_arr
 
+
+def post_process_bw(img_arr, cfg: config.Config):
+    # This was causing inversion, so it is disabled for now.
+    # exp_model = exposure_model.create_exposure_model(cfg.exposure_weights_path)
+    # exposure = Exposure(exp_model)
+    # output_arr = exposure.process(img_arr)
+
+    logger.info("Performing BW post-processing.")
+    # RGB Weights for the deep orange monochrome filter.
+    deep_orange_weights = (0.5, 0.4, 0.1)
+    monochrome_transform = MonochromeTransform(weights=deep_orange_weights)
+    output_arr = monochrome_transform.process(img_arr)
+
+    return output_arr
 
 def crop_image(img_arr, img_sizes: rawpy.ImageSizes):
     height = img_sizes.height
@@ -135,6 +152,7 @@ def main():
     parser.add_argument("-k", "--fake", required=False, default=False, action="store_true")
     parser.add_argument("-c", "--crop", required=False, default=False, action="store_true")
     parser.add_argument("-n", "--nopost", required=False, default=False, action="store_true")
+    parser.add_argument("-m", "--monochrome", required=False, default=False, action="store_true")
     parser.add_argument("raw_filename")
     args = parser.parse_args()
 
@@ -154,6 +172,7 @@ def main():
         demosaic_weights=args.weights,
         crop=args.crop,
         post_process=post_process,
+        monochrome=args.monochrome,
         fake=args.fake,
     )
 
