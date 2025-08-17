@@ -1,6 +1,7 @@
 # Module which performs raw processing and provides an entry point for user actions.
 
 import argparse
+import copy
 import logging
 import math
 import numpy as np
@@ -16,8 +17,9 @@ from cnn_demosaic.demosaic import Demosaic
 from cnn_demosaic.exposure import Exposure
 from cnn_demosaic import model
 from cnn_demosaic import output
-from cnn_demosaic import transform
 from importlib import resources
+from cnn_demosaic import transform
+from cnn_demosaic.util import path_parser
 from tensorflow import keras
 
 
@@ -165,25 +167,38 @@ def main():
 
     post_process = not args.nopost
 
-    processing_config = config.Config(
-        args.raw_filename,
-        output_filename=args.output,
-        format=args.format,
-        demosaic_weights=args.weights,
-        crop=args.crop,
-        post_process=post_process,
-        monochrome=args.monochrome,
-        fake=args.fake,
-    )
+    processing_paths = [args.raw_filename]
+    output_path = args.output
 
-    processing_config.validate_config()
+    # If the path starts with an '@' symbol, this indicates that it contains a range
+    # expression and should be expanded.
+    if args.raw_filename.startswith('@'):
+        # If a path expression is supplied, args.output will be ignored.
+        output_path = None
+        processing_paths = path_parser.parse_path_statement(args.raw_filename[1:])
 
-    output_path = processing_config.output_path
-    raw_path = processing_config.raw_path
+    for raw_file_path_str in processing_paths:
+        # Create a new configuration for each processed raw file.
+        # This ensures that raw_path and output_path are correctly set for the current iteration.
+        current_processing_config = config.Config(
+            raw_file_path_str, # Use the string path for the current file
+            output_filename=output_path,
+            format=args.format,
+            demosaic_weights=args.weights,
+            crop=args.crop,
+            post_process=post_process,
+            monochrome=args.monochrome,
+            fake=args.fake,
+        )
 
-    logger.debug(f'Processing: ["{raw_path.absolute()}"] => "{output_path.absolute()}"')
+        current_processing_config.validate_config()
 
-    process_raw(processing_config)
+        raw_path_obj = current_processing_config.raw_path
+        output_path_obj = current_processing_config.output_path
+
+        logger.debug(f'Processing: ["{raw_path_obj.absolute()}"] => "{output_path_obj.absolute()}"')
+
+        process_raw(current_processing_config)
 
 
 if __name__ == "__main__":
