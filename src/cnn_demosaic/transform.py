@@ -67,8 +67,8 @@ def tf_rgb_luma_fn(rgb_ch):
 @tf.function()
 def tf_s_curve_fn(img_arr, offset, contrast, slope):
     """Applies the s-curve function in a TensorFlow context."""
-    output = (img_arr + offset) * contrast
-    return 1 / (1 + tf.math.exp(slope * output))
+    output = (img_arr - offset) * contrast
+    return 1 / (1 + tf.math.exp(-1 * slope * output))
 
 
 @tf.function()
@@ -79,3 +79,8 @@ def tf_levels_fn(img_arr, in_min, in_max):
 
     scale_ratio = 1.0 / dyn_range
     return (img_arr - in_min) * scale_ratio
+
+
+@tf.function()
+def tf_clip_fn(img_arr):
+    return tf.clip_by_value(img_arr, clip_value_min=0.0, clip_value_max=1.0)

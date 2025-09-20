@@ -1,7 +1,7 @@
 # Module for correcting exposure / luminance signal in the raw image.
 
 import tensorflow as tf
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from cnn_demosaic import transform
 from cnn_demosaic.profile import profile
@@ -12,9 +12,24 @@ class ExposureParameters:
     black_level: float
     white_level: float
     gamma: float
-    contrast: float
-    slope: float
-    shift: float
+    use_s_curve: bool
+    contrast: float | None
+    slope: float | None
+    shift: float | None
+
+    def to_json(self) -> str:
+        """
+        Exports the ExposureParameters instance as a JSON string.
+        """
+        return json.dumps(asdict(self), indent=4)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "ExposureParameters":
+        """
+        Creates an ExposureParameters instance from a JSON string.
+        """
+        data = json.loads(json_str)
+        return cls(**data)
 
 
 class Exposure:
@@ -39,6 +54,7 @@ class Exposure:
             black_level=levels[0][0],
             white_level=levels[0][1],
             gamma=gamma[0][0],
+            use_s_curve=True,
             contrast=curve[0][0],
             slope=curve[0][1],
             shift=curve[0][2]
@@ -64,7 +80,9 @@ class Exposure:
             params: An instance of ExposureParameters containing black_level, white_level,
                     gamma, contrast, slope, and shift.
         """
-        output_arr = tf.pow(img_arr, params.gamma)
-        output_arr = transform.tf_levels_fn(output_arr, params.white_level, params.black_level)
-        output_arr = transform.tf_s_curve_fn(output_arr, params.contrast, params.slope, params.shift)
+        output_arr = img_arr
+        output_arr = transform.tf_levels_fn(output_arr, params.black_level, params.white_level)
+        output_arr = tf.pow(output_arr, params.gamma)
+        if params.use_s_curve:
+            output_arr = transform.tf_s_curve_fn(output_arr, params.shift, params.contrast, params.slope)
         return output_arr

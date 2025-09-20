@@ -1,11 +1,9 @@
 # Module which performs raw processing and provides an entry point for user actions.
 
 import argparse
-import copy
 import logging
 import math
 import numpy as np
-import pathlib
 import rawpy
 import tensorflow as tf
 
@@ -15,6 +13,7 @@ from cnn_demosaic import exposure_model
 from cnn_demosaic.color import WhiteBalance, ColorTransform, MonochromeTransform
 from cnn_demosaic.demosaic import Demosaic
 from cnn_demosaic.exposure import Exposure
+from cnn_demosaic.types import MonochromeParameters
 from cnn_demosaic import model
 from cnn_demosaic import output
 from importlib import resources
@@ -110,11 +109,12 @@ def post_process_bw(img_arr, cfg: config.Config):
 
     logger.info("Performing BW post-processing.")
     # RGB Weights for the deep orange monochrome filter.
-    deep_orange_weights = (0.5, 0.4, 0.1)
-    monochrome_transform = MonochromeTransform(weights=deep_orange_weights)
+    deep_orange_weights = MonochromeParameters(0.8, 0.6, 0.1)
+    monochrome_transform = MonochromeTransform(deep_orange_weights)
     output_arr = monochrome_transform.process(img_arr)
 
     return output_arr
+
 
 def crop_image(img_arr, img_sizes: rawpy.ImageSizes):
     height = img_sizes.height

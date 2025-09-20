@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 from cnn_demosaic.profile import profile
+from cnn_demosaic.types import MonochromeParameters
 
 
 class Color:
@@ -86,13 +87,13 @@ class ColorTransform:
 
 
 class MonochromeTransform:
-    def __init__(self, weights: tuple):
+    def __init__(self, params: MonochromeParameters):
         """Initializes the MonochromeTransform.
         Args:
-            weights (tuple): A tuple containing per-channel weights.
+            params (MonochromeParameters): A tuple containing per-channel weights.
                              These weights are used to mix the RGB channels into a single monochrome channel.
         """
-        self.weights = weights  # tuple containing per-channel weights.
+        self.weights = (params.ch_r, params.ch_g, params.ch_b)
 
     @profile()
     def process(self, img_arr):
