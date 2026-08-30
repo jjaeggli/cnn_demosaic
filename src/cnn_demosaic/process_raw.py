@@ -10,10 +10,9 @@ import tensorflow as tf
 from cnn_demosaic import color_model
 from cnn_demosaic import color_convert
 from cnn_demosaic import config
-from cnn_demosaic import exposure_model
+from cnn_demosaic import exposure
 from cnn_demosaic.color import WhiteBalance, ColorTransform, MonochromeTransform
 from cnn_demosaic.demosaic import Demosaic
-from cnn_demosaic.exposure import Exposure
 from cnn_demosaic.types import MonochromeParameters
 from cnn_demosaic import model
 from cnn_demosaic import output
@@ -25,7 +24,6 @@ from tensorflow import keras
 
 WEIGHTS_MODULE = "cnn_demosaic.weights"
 DEFAULT_WEIGHTS = "x-trans.weights.h5"
-EXPOSURE_WEIGHTS = "exposure.weights.h5"
 COLOR_WEIGHTS = "color.weights.h5"
 RAF_SUFFIX = ".raf"
 
@@ -44,6 +42,15 @@ def process_raw(cfg: config.Config):
         camera_whitebalance = raw_img.camera_whitebalance
         daylight_whitebalance = np.asarray(raw_img.daylight_whitebalance)
         color_params = color_convert.get_color_params(raw_img)
+        exposure_params = exposure.get_exposure_params(
+            raw_img,
+            exposure_offset_ev=cfg.exposure_offset_ev,
+            metering_headroom_ev=cfg.metering_headroom_ev,
+            mid_gray_target=cfg.mid_gray_target,
+        )
+    exposure_processor = exposure.Exposure(exposure_params)
+
+    logger.debug("Exposure parameters: %s", exposure_params)
 
     loaded_model = None
 
@@ -79,13 +86,16 @@ def process_raw(cfg: config.Config):
 
     if cfg.post_process:
         if cfg.monochrome:
-            output_arr = post_process_bw(output_arr, cfg)
-        elif cfg.color_pipeline == "model":
+            output_arr = post_process_bw(output_arr, exposure_processor, cfg)
+        elif cfg.color_pipeline == config.COLOR_PIPELINE_MODEL:
             output_arr = post_process(output_arr, wb_matrix, cfg)
         else:
-            output_arr = post_process_default(output_arr, color_params, norm_min, norm_max, cfg)
+            output_arr = post_process_default(
+                output_arr, color_params, exposure_processor, norm_min, norm_max, cfg
+            )
 
     output_arr = np.asarray(output_arr, dtype=np.float32)
+    output_arr = transform.encode_output_gamma(output_arr, cfg.output_gamma)
 
     if cfg.crop:
         output_arr = crop_image(output_arr, raw_img_sizes)
@@ -94,57 +104,51 @@ def process_raw(cfg: config.Config):
 
 
 def post_process(img_arr, wb_matrix, cfg: config.Config):
-    exp_model = exposure_model.create_exposure_model(cfg.exposure_weights_path)
-    exposure = Exposure(exp_model)
-
     wb_model = color_model.create_white_balance_model(cfg.white_balance_weights_path)
     white_balance = WhiteBalance(wb_model)
 
     ct_model = color_model.create_color_transform_model(cfg.color_weights_path)
     color_transform = ColorTransform(ct_model)
 
-    logger.info("Performing post-processing.")
-    output_arr = exposure.process(img_arr)
-    output_arr = white_balance.process(output_arr, wb_matrix)
+    logger.info("Performing model color post-processing.")
+    output_arr = white_balance.process(img_arr, wb_matrix)
     output_arr = color_transform.process(output_arr)
 
     return output_arr
 
 
-def post_process_default(img_arr, color_params, norm_min, norm_max, cfg: config.Config):
+def post_process_default(
+    img_arr, color_params, exposure_processor: exposure.Exposure,
+    norm_min, norm_max, cfg: config.Config
+):
     """Performs color conversion using the camera color matrix and white balance.
 
     Args:
         img_arr: The (H, W, 3) demosaiced image in normalized camera RGB.
         color_params: The ColorTransformParameters for the image.
+        exposure_processor: The exposure processor with the parameters derived
+            from the camera metering metadata.
         norm_min: The image minimum which was used for demosaic normalization.
         norm_max: The image maximum which was used for demosaic normalization.
         cfg: The processing configuration.
     """
-    exp_model = exposure_model.create_exposure_model(cfg.exposure_weights_path)
-    exposure = Exposure(exp_model)
-
     logger.info("Performing default color post-processing.")
     output_arr = color_convert.linearize(img_arr, color_params, norm_min, norm_max)
     output_arr = color_convert.white_balance(output_arr, color_params.wb_multipliers)
     output_arr = color_convert.camera_to_srgb(output_arr, color_params)
-    output_arr = exposure.process(output_arr)
-    output_arr = transform.tf_clip_fn(output_arr)
+    output_arr = exposure_processor.process(output_arr)
 
     return output_arr
 
 
-def post_process_bw(img_arr, cfg: config.Config):
-    # This was causing inversion, so it is disabled for now.
-    # exp_model = exposure_model.create_exposure_model(cfg.exposure_weights_path)
-    # exposure = Exposure(exp_model)
-    # output_arr = exposure.process(img_arr)
-
+def post_process_bw(img_arr, exposure_processor: exposure.Exposure, cfg: config.Config):
     logger.info("Performing BW post-processing.")
-    # RGB Weights for the deep orange monochrome filter.
-    deep_orange_weights = MonochromeParameters(0.8, 0.6, 0.1)
+    # RGB weights for the deep orange monochrome filter, normalized to sum to
+    # 1.0 so that the metered exposure gain is preserved.
+    deep_orange_weights = MonochromeParameters(0.8 / 1.5, 0.6 / 1.5, 0.1 / 1.5)
     monochrome_transform = MonochromeTransform(deep_orange_weights)
     output_arr = monochrome_transform.process(img_arr)
+    output_arr = exposure_processor.process(output_arr)
 
     return output_arr
 
@@ -191,13 +195,48 @@ def main():
     parser.add_argument(
         "-x", "--color",
         required=False,
-        default="default",
-        choices=["default", "model"],
+        default=config.COLOR_PIPELINE_DEFAULT,
+        choices=[config.COLOR_PIPELINE_DEFAULT, config.COLOR_PIPELINE_MODEL],
         help=(
             "The color processing pipeline to use. 'default' uses the camera " +
             "color matrix from the raw file. 'model' uses a white balance and " +
             "color transform models."
         ),
+    )
+    parser.add_argument(
+        "--gamma",
+        required=False,
+        default=transform.OUTPUT_GAMMA_LINEAR,
+        choices=[transform.OUTPUT_GAMMA_LINEAR, transform.OUTPUT_GAMMA_SRGB],
+        help=(
+            "The output transfer function. 'linear' preserves the " +
+            "scene-referred values. 'srgb' applies the sRGB OETF for " +
+            "display-referred output."
+        ),
+    )
+    parser.add_argument(
+        "--exposure-offset",
+        required=False,
+        type=float,
+        default=exposure.DEFAULT_EXPOSURE_OFFSET_EV,
+        help="Exposure correction applied to the metered exposure, in stops.",
+    )
+    parser.add_argument(
+        "--meter-headroom",
+        required=False,
+        type=float,
+        default=exposure.DEFAULT_METERING_HEADROOM_EV,
+        help=(
+            "The number of stops between the metered mid-gray and sensor " +
+            "clipping, used to determine the standard exposure."
+        ),
+    )
+    parser.add_argument(
+        "--mid-gray",
+        required=False,
+        type=float,
+        default=exposure.DEFAULT_MID_GRAY,
+        help="The target linear value for a metered 18%% gray.",
     )
     parser.add_argument("raw_filename")
     args = parser.parse_args()
@@ -234,6 +273,10 @@ def main():
             monochrome=args.monochrome,
             fake=args.fake,
             color_pipeline=args.color,
+            output_gamma=args.gamma,
+            exposure_offset_ev=args.exposure_offset,
+            metering_headroom_ev=args.meter_headroom,
+            mid_gray_target=args.mid_gray,
         )
 
         current_processing_config.validate_config()

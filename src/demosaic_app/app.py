@@ -8,7 +8,6 @@ from cnn_demosaic import color
 from cnn_demosaic import color_model
 from cnn_demosaic import config
 from cnn_demosaic import exposure
-from cnn_demosaic import exposure_model
 from cnn_demosaic import transform
 from cnn_demosaic import types
 
@@ -31,24 +30,11 @@ COLOR_MODELS = {
 
 def get_exposure_processor():
     if "exp" not in st.session_state:
-        weights_path = config.get_weights_resource_path(None, config.EXPOSURE_WEIGHTS)
-        exp_model = exposure_model.create_exposure_model(weights_path)
-        exp = exposure.Exposure(exp_model)
+        exp = exposure.Exposure()
         st.session_state["exp"] = exp
         return exp
     else:
         return st.session_state["exp"]
-
-
-def predict_exposure(exr_img):
-    """Use the exposure model to predict processing parameters for the image."""
-    exp = get_exposure_processor()
-
-    img_arr = exr_img.reshape((exr_img.size // 3, 3))
-    levels, gamma, curve = exp.get_processing_params(img_arr)
-    st.session_state["exp_levels"] = levels
-    st.session_state["exp_gamma"] = gamma[0][0]
-    st.session_state["exp_curve"] = curve[0]
 
 
 def apply_exposure(img_arr, params: exposure.ExposureParameters):

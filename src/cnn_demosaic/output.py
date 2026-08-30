@@ -14,6 +14,7 @@ TIFF_SUFFIX = ".tiff"
 
 
 def write_tiff(output_arr: np.ndarray, output_path):
+    output_arr = np.clip(output_arr, 0.0, 1.0)
     output_arr = (output_arr * 65535).astype(np.uint16)
     # Determine the number of channels based on the array shape.
     # The array is expected to be a 2D image, either (H, W, 3) for color

@@ -1,14 +1,17 @@
+from cnn_demosaic import exposure
 from cnn_demosaic import output
+from cnn_demosaic.transform import OUTPUT_GAMMA_LINEAR, OUTPUT_GAMMA_SRGB
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
 WEIGHTS_MODULE = "cnn_demosaic.weights"
 DEMOSAIC_WEIGHTS = "x-trans.weights.h5"
-EXPOSURE_WEIGHTS = "exposure.weights.h5"
 COLOR_WEIGHTS = "color.weights.h5"
 COLOR_TRANSFORM_WEIGHTS = "color_transform.weights.h5"
 WHITE_BALANCE_WEIGHTS = "white_balance.weights.h5"
+COLOR_PIPELINE_DEFAULT = "default"
+COLOR_PIPELINE_MODEL = "model"
 
 
 @dataclass
@@ -16,18 +19,22 @@ class Config:
     raw_filename: str
     output_filename: str | None = None
     format: str | None = None
-    color_pipeline: str = "default"
+    color_pipeline: str = COLOR_PIPELINE_DEFAULT
     color_weights: str | None = None
     demosaic_weights: str | None = None
-    exposure_weights: str | None = None
     white_balance_weights: str | None = None
+    output_gamma: str = OUTPUT_GAMMA_LINEAR
+    exposure_offset_ev: float = exposure.DEFAULT_EXPOSURE_OFFSET_EV
+    metering_headroom_ev: float = exposure.DEFAULT_METERING_HEADROOM_EV
+    mid_gray_target: float = exposure.DEFAULT_MID_GRAY
     crop: bool = True
     jpeg_crop: bool = False
     post_process: bool = True
     monochrome: bool = False
     fake: bool = False
 
-    VALID_COLOR_PIPELINES = ("default", "model")
+    VALID_COLOR_PIPELINES = (COLOR_PIPELINE_DEFAULT, COLOR_PIPELINE_MODEL)
+    VALID_OUTPUT_GAMMAS = (OUTPUT_GAMMA_LINEAR, OUTPUT_GAMMA_SRGB)
 
     def __post_init__(self):
         self.raw_path = Path(self.raw_filename)
@@ -41,10 +48,6 @@ class Config:
     @property
     def color_weights_path(self):
         return get_weights_resource_path(self.color_weights, COLOR_TRANSFORM_WEIGHTS)
-
-    @property
-    def exposure_weights_path(self):
-        return get_weights_resource_path(self.exposure_weights, EXPOSURE_WEIGHTS)
 
     @property
     def white_balance_weights_path(self):
@@ -72,19 +75,19 @@ class Config:
                 f"Invalid color pipeline [{self.color_pipeline}], " +
                 f"must be one of {self.VALID_COLOR_PIPELINES}"
             )
+        if self.output_gamma not in self.VALID_OUTPUT_GAMMAS:
+            raise ValueError(
+                f"Invalid output gamma [{self.output_gamma}], " +
+                f"must be one of {self.VALID_OUTPUT_GAMMAS}"
+            )
 
         validate_weights_path(self.demosaic_weights_path)
 
-        # Post processing implies that models other than the demosaicing model
-        # will be used.
-        if self.post_process:
-            validate_weights_path(self.exposure_weights_path)
-
-            # The learned color pipeline requires the white balance and color
-            # transform models in addition to the exposure model.
-            if self.color_pipeline == "model":
-                validate_weights_path(self.color_weights_path)
-                validate_weights_path(self.white_balance_weights_path)
+        # The learned color pipeline requires the white balance and color
+        # transform models.
+        if self.color_pipeline == COLOR_PIPELINE_MODEL:
+            validate_weights_path(self.color_weights_path)
+            validate_weights_path(self.white_balance_weights_path)
 
     @property
     def output_handler(self):

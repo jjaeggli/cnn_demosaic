@@ -1,6 +1,9 @@
 import numpy as np
 import tensorflow as tf
 
+OUTPUT_GAMMA_LINEAR = "linear"
+OUTPUT_GAMMA_SRGB = "srgb"
+
 
 def normalize_arr(array_input):
     """Fits the image to the range (0.0, 1.0)."""
@@ -67,6 +70,32 @@ def srgb_oetf(img_arr):
     # The power branch requires non-negative input values.
     power = 1.055 * np.power(np.maximum(img_arr, 0.0), 1 / 2.4) - 0.055
     return np.where(img_arr <= 0.0031308, 12.92 * img_arr, power)
+
+
+def encode_output_gamma(img_arr, output_gamma=OUTPUT_GAMMA_LINEAR):
+    """Encodes linear image values with the specified output transfer function.
+
+    OUTPUT_GAMMA_LINEAR returns the scene-referred values unchanged, which is
+    the appropriate encoding for floating point formats such as EXR.
+    OUTPUT_GAMMA_SRGB applies the sRGB OETF, producing display-referred
+    encoded values.
+
+    Args:
+        img_arr: An array of linear values.
+        output_gamma: The output encoding, either OUTPUT_GAMMA_LINEAR or
+            OUTPUT_GAMMA_SRGB.
+
+    Returns:
+        An array of encoded values in the same shape as the input.
+    """
+    if output_gamma == OUTPUT_GAMMA_SRGB:
+        return srgb_oetf(np.maximum(np.asarray(img_arr), 0.0))
+    if output_gamma != OUTPUT_GAMMA_LINEAR:
+        raise ValueError(
+            f"Invalid output gamma [{output_gamma}], must be " +
+            f"'{OUTPUT_GAMMA_LINEAR}' or '{OUTPUT_GAMMA_SRGB}'"
+        )
+    return img_arr
 
 
 @tf.function()
