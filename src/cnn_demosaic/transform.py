@@ -57,6 +57,18 @@ def gamma(image, gamma=1.0):
     return np.power(image, gamma)
 
 
+def srgb_oetf(img_arr):
+    """Applies the sRGB opto-electronic transfer function (linear to encoded).
+
+    This converts linear sRGB values to encoded (display referred) sRGB values
+    using the standard piecewise transfer function defined in IEC 61966-2-1.
+    """
+    img_arr = np.asarray(img_arr)
+    # The power branch requires non-negative input values.
+    power = 1.055 * np.power(np.maximum(img_arr, 0.0), 1 / 2.4) - 0.055
+    return np.where(img_arr <= 0.0031308, 12.92 * img_arr, power)
+
+
 @tf.function()
 def tf_rgb_luma_fn(rgb_ch):
     # Convert the image to a luma channel using the following ratios:

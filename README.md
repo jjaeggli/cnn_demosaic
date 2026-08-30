@@ -16,7 +16,7 @@ This approach will be slower than Markesteijn, by at least one order of magnitud
 
 - [x] Output as 16-bit floating point OpenEXR images
 - [x] Output as 16-bit integer TIFF images
-- [ ] Proper color-space conversion from *camera RGB* to *sRGB*
+- [x] Color-space conversion from *camera RGB* to *sRGB* using the camera color matrix and white balance from the raw file (dcraw-style)
 - [ ] Include image metadata in output
 - [ ] Train X-Trans models with noise-augmented images for combined ISO-optimized de-noise and demosaicing
 - [ ] Train Bayer models
@@ -67,8 +67,21 @@ pip install .
 
 ## Usage
 
-Note: Color conversion is not currently implemented. Color output will be incorrect and not easily
-converted to a color-corrected image.
+### Color processing
+
+Two color processing pipelines are available, selected with the `--color` option:
+
+- `default` (the default): Performs white balance and camera RGB to sRGB conversion
+  deterministically, following the same approach as dcraw. The image values are linearized
+  using the sensor black and white levels, white balanced with the as-shot camera multipliers,
+  and converted to linear sRGB using the camera color matrix embedded in the raw file. Tone
+  mapping is then applied using the learned exposure model.
+- `model`: Uses the learned white balance and color transform models. This was the original
+  experimental approach and is retained for comparison.
+
+OpenEXR output contains tone mapped linear sRGB values (the sRGB transfer function is not
+applied), and the EXR format does not record the color primaries. For display-referred sRGB
+encoding, `cnn_demosaic.transform.srgb_oetf` can be applied to the linear values.
 
 Images are currently output in the 16-bit floating point OpenEXR format. This provides a great deal
 of flexibility for adjusting the output levels and preserving the dynamic range, as demosaicing is

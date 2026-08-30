@@ -16,6 +16,7 @@ class Config:
     raw_filename: str
     output_filename: str | None = None
     format: str | None = None
+    color_pipeline: str = "default"
     color_weights: str | None = None
     demosaic_weights: str | None = None
     exposure_weights: str | None = None
@@ -25,6 +26,8 @@ class Config:
     post_process: bool = True
     monochrome: bool = False
     fake: bool = False
+
+    VALID_COLOR_PIPELINES = ("default", "model")
 
     def __post_init__(self):
         self.raw_path = Path(self.raw_filename)
@@ -64,15 +67,24 @@ class Config:
             raise ValueError(f"The input filename {self.raw_path.absolute()} is not a file!")
         if self.output_path.exists():
             raise ValueError(f"The output filename {self.output_path.absolute()} already exists!")
+        if self.color_pipeline not in self.VALID_COLOR_PIPELINES:
+            raise ValueError(
+                f"Invalid color pipeline [{self.color_pipeline}], " +
+                f"must be one of {self.VALID_COLOR_PIPELINES}"
+            )
 
         validate_weights_path(self.demosaic_weights_path)
 
         # Post processing implies that models other than the demosaicing model
         # will be used.
         if self.post_process:
-            validate_weights_path(self.color_weights_path)
             validate_weights_path(self.exposure_weights_path)
-            validate_weights_path(self.white_balance_weights_path)
+
+            # The learned color pipeline requires the white balance and color
+            # transform models in addition to the exposure model.
+            if self.color_pipeline == "model":
+                validate_weights_path(self.color_weights_path)
+                validate_weights_path(self.white_balance_weights_path)
 
     @property
     def output_handler(self):

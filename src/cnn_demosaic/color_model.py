@@ -1,25 +1,16 @@
-import numpy as np
 import tensorflow as tf
 
 from cnn_demosaic import transform
+from cnn_demosaic.color_convert import srgb_to_xyz, xyz_to_srgb
 from tensorflow import keras
 from tensorflow.keras import layers
 
 from cnn_demosaic.model import create_model
 
 
-srgb_to_xyz = np.array(
-    [
-        [0.4124564, 0.3575761, 0.1804375],
-        [0.2126729, 0.7151522, 0.0721750],
-        [0.0193339, 0.1191920, 0.9503041],
-    ],
-    dtype=np.float32,
-)
-
-# This roughly matches the sRGB D65 matrix shown here:
-# http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
-xyz_to_srgb = np.linalg.inv(srgb_to_xyz)
+# Export the sRGB to XYZ and XYZ to sRGB matrices for use by the learned color
+# models.
+__all__ = ["srgb_to_xyz", "xyz_to_srgb"]
 
 
 class XyzToSrgbLayer(layers.Layer):

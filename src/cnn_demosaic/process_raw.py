@@ -8,6 +8,7 @@ import rawpy
 import tensorflow as tf
 
 from cnn_demosaic import color_model
+from cnn_demosaic import color_convert
 from cnn_demosaic import config
 from cnn_demosaic import exposure_model
 from cnn_demosaic.color import WhiteBalance, ColorTransform, MonochromeTransform
@@ -42,6 +43,7 @@ def process_raw(cfg: config.Config):
         raw_img_sizes = raw_img.sizes
         camera_whitebalance = raw_img.camera_whitebalance
         daylight_whitebalance = np.asarray(raw_img.daylight_whitebalance)
+        color_params = color_convert.get_color_params(raw_img)
 
     loaded_model = None
 
@@ -66,14 +68,22 @@ def process_raw(cfg: config.Config):
     per_tile_fn = transform.adj_levels_per_tile_fn
 
     processor = Demosaic(loaded_model, per_tile_fn=per_tile_fn, xtrans=is_xtrans)
+
+    # The demosaic model operates on image values normalized to (0.0, 1.0) using
+    # the image minimum and maximum. These values are retained so that the color
+    # conversion stage can recover the linear sensor values.
+    norm_min = float(np.min(raw_img_arr))
+    norm_max = float(np.max(raw_img_arr))
     raw_img_arr = transform.normalize_arr(raw_img_arr)
     output_arr = processor.demosaic(raw_img_arr)
 
     if cfg.post_process:
         if cfg.monochrome:
             output_arr = post_process_bw(output_arr, cfg)
-        else:
+        elif cfg.color_pipeline == "model":
             output_arr = post_process(output_arr, wb_matrix, cfg)
+        else:
+            output_arr = post_process_default(output_arr, color_params, norm_min, norm_max, cfg)
 
     output_arr = np.asarray(output_arr, dtype=np.float32)
 
@@ -97,6 +107,29 @@ def post_process(img_arr, wb_matrix, cfg: config.Config):
     output_arr = exposure.process(img_arr)
     output_arr = white_balance.process(output_arr, wb_matrix)
     output_arr = color_transform.process(output_arr)
+
+    return output_arr
+
+
+def post_process_default(img_arr, color_params, norm_min, norm_max, cfg: config.Config):
+    """Performs color conversion using the camera color matrix and white balance.
+
+    Args:
+        img_arr: The (H, W, 3) demosaiced image in normalized camera RGB.
+        color_params: The ColorTransformParameters for the image.
+        norm_min: The image minimum which was used for demosaic normalization.
+        norm_max: The image maximum which was used for demosaic normalization.
+        cfg: The processing configuration.
+    """
+    exp_model = exposure_model.create_exposure_model(cfg.exposure_weights_path)
+    exposure = Exposure(exp_model)
+
+    logger.info("Performing default color post-processing.")
+    output_arr = color_convert.linearize(img_arr, color_params, norm_min, norm_max)
+    output_arr = color_convert.white_balance(output_arr, color_params.wb_multipliers)
+    output_arr = color_convert.camera_to_srgb(output_arr, color_params)
+    output_arr = exposure.process(output_arr)
+    output_arr = transform.tf_clip_fn(output_arr)
 
     return output_arr
 
@@ -155,6 +188,17 @@ def main():
     parser.add_argument("-c", "--crop", required=False, default=False, action="store_true")
     parser.add_argument("-n", "--nopost", required=False, default=False, action="store_true")
     parser.add_argument("-m", "--monochrome", required=False, default=False, action="store_true")
+    parser.add_argument(
+        "-x", "--color",
+        required=False,
+        default="default",
+        choices=["default", "model"],
+        help=(
+            "The color processing pipeline to use. 'default' uses the camera " +
+            "color matrix from the raw file. 'model' uses a white balance and " +
+            "color transform models."
+        ),
+    )
     parser.add_argument("raw_filename")
     args = parser.parse_args()
 
@@ -189,6 +233,7 @@ def main():
             post_process=post_process,
             monochrome=args.monochrome,
             fake=args.fake,
+            color_pipeline=args.color,
         )
 
         current_processing_config.validate_config()
