@@ -3,6 +3,8 @@ import tensorflow as tf
 
 OUTPUT_GAMMA_LINEAR = "linear"
 OUTPUT_GAMMA_SRGB = "srgb"
+OUTPUT_GAMMA_REC2020 = "rec2020"
+OUTPUT_GAMMA_PROPHOTO = "prophoto"
 
 
 def normalize_arr(array_input):
@@ -72,30 +74,65 @@ def srgb_oetf(img_arr):
     return np.where(img_arr <= 0.0031308, 12.92 * img_arr, power)
 
 
+def rec2020_oetf(img_arr):
+    """Applies the Rec.2020 (ITU-R BT.2020) transfer function (linear to encoded).
+
+    This converts linear Rec.2020 values to encoded (display referred) values
+    using the piecewise transfer function defined in ITU-R BT.2020.
+    """
+    img_arr = np.asarray(img_arr)
+    alpha = 1.09929682680944
+    beta = 0.018053968510807
+    # The power branch requires non-negative input values.
+    power = alpha * np.power(np.maximum(img_arr, 0.0), 0.45) - (alpha - 1.0)
+    return np.where(img_arr < beta, 4.5 * img_arr, power)
+
+
+def prophoto_oetf(img_arr):
+    """Applies the ProPhoto RGB (ROMM) transfer characteristic (linear to encoded).
+
+    This converts linear ProPhoto values to encoded values using the ROMM
+    transfer characteristic: a pure 1/1.8 power function with a linear segment
+    below 1/512 to avoid an infinite slope at zero.
+    """
+    img_arr = np.asarray(img_arr)
+    # The power branch requires non-negative input values.
+    power = np.power(np.maximum(img_arr, 0.0), 1 / 1.8)
+    return np.where(img_arr < 1 / 512, 16.0 * img_arr, power)
+
+
+GAMMA_ENCODERS = {
+    OUTPUT_GAMMA_SRGB: srgb_oetf,
+    OUTPUT_GAMMA_REC2020: rec2020_oetf,
+    OUTPUT_GAMMA_PROPHOTO: prophoto_oetf,
+}
+
+
 def encode_output_gamma(img_arr, output_gamma=OUTPUT_GAMMA_LINEAR):
     """Encodes linear image values with the specified output transfer function.
 
     OUTPUT_GAMMA_LINEAR returns the scene-referred values unchanged, which is
-    the appropriate encoding for floating point formats such as EXR.
-    OUTPUT_GAMMA_SRGB applies the sRGB OETF, producing display-referred
-    encoded values.
+    the appropriate encoding for floating point formats such as EXR. The
+    remaining encodings apply the transfer function matching the output color
+    space (sRGB, Rec.2020, or ProPhoto), producing display-referred encoded
+    values.
 
     Args:
         img_arr: An array of linear values.
-        output_gamma: The output encoding, either OUTPUT_GAMMA_LINEAR or
-            OUTPUT_GAMMA_SRGB.
+        output_gamma: The output encoding, one of the OUTPUT_GAMMA_* constants.
 
     Returns:
         An array of encoded values in the same shape as the input.
     """
-    if output_gamma == OUTPUT_GAMMA_SRGB:
-        return srgb_oetf(np.maximum(np.asarray(img_arr), 0.0))
-    if output_gamma != OUTPUT_GAMMA_LINEAR:
+    if output_gamma == OUTPUT_GAMMA_LINEAR:
+        return img_arr
+    encoder = GAMMA_ENCODERS.get(output_gamma)
+    if encoder is None:
         raise ValueError(
             f"Invalid output gamma [{output_gamma}], must be " +
-            f"'{OUTPUT_GAMMA_LINEAR}' or '{OUTPUT_GAMMA_SRGB}'"
+            f"one of {(OUTPUT_GAMMA_LINEAR,) + tuple(GAMMA_ENCODERS)}"
         )
-    return img_arr
+    return encoder(np.maximum(np.asarray(img_arr), 0.0))
 
 
 @tf.function()

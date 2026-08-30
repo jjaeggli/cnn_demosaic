@@ -153,6 +153,22 @@ def test_encode_output_gamma_srgb():
     assert output_arr[0, 1] == pytest.approx(0.46, abs=0.01)
 
 
+def test_encode_output_gamma_rec2020():
+    img_arr = np.array([[-0.1, 0.18, 1.5]], dtype=np.float32)
+    output_arr = transform.encode_output_gamma(img_arr, "rec2020")
+    assert np.allclose(output_arr, transform.rec2020_oetf(np.maximum(img_arr, 0.0)))
+    # A linear 0.18 mid-gray encodes to approximately 0.41.
+    assert output_arr[0, 1] == pytest.approx(0.41, abs=0.01)
+
+
+def test_encode_output_gamma_prophoto():
+    img_arr = np.array([[-0.1, 0.18, 1.5]], dtype=np.float32)
+    output_arr = transform.encode_output_gamma(img_arr, "prophoto")
+    assert np.allclose(output_arr, transform.prophoto_oetf(np.maximum(img_arr, 0.0)))
+    # A linear 0.18 mid-gray encodes to approximately 0.39.
+    assert output_arr[0, 1] == pytest.approx(0.39, abs=0.01)
+
+
 def test_encode_output_gamma_invalid():
     with pytest.raises(ValueError, match="Invalid output gamma"):
         transform.encode_output_gamma(np.ones(3), "rec709")

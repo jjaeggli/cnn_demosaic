@@ -41,7 +41,7 @@ def process_raw(cfg: config.Config):
         raw_img_sizes = raw_img.sizes
         camera_whitebalance = raw_img.camera_whitebalance
         daylight_whitebalance = np.asarray(raw_img.daylight_whitebalance)
-        color_params = color_convert.get_color_params(raw_img)
+        color_params = color_convert.get_color_params(raw_img, cfg.output_colorspace)
         exposure_params = exposure.get_exposure_params(
             raw_img,
             exposure_offset_ev=cfg.exposure_offset_ev,
@@ -135,7 +135,7 @@ def post_process_default(
     logger.info("Performing default color post-processing.")
     output_arr = color_convert.linearize(img_arr, color_params, norm_min, norm_max)
     output_arr = color_convert.white_balance(output_arr, color_params.wb_multipliers)
-    output_arr = color_convert.camera_to_srgb(output_arr, color_params)
+    output_arr = color_convert.camera_to_rgb(output_arr, color_params)
     output_arr = exposure_processor.process(output_arr)
 
     return output_arr
@@ -204,14 +204,32 @@ def main():
         ),
     )
     parser.add_argument(
-        "--gamma",
+        "-g", "--gamma",
         required=False,
         default=transform.OUTPUT_GAMMA_LINEAR,
-        choices=[transform.OUTPUT_GAMMA_LINEAR, transform.OUTPUT_GAMMA_SRGB],
+        choices=[
+            transform.OUTPUT_GAMMA_LINEAR,
+            transform.OUTPUT_GAMMA_SRGB,
+            transform.OUTPUT_GAMMA_REC2020,
+            transform.OUTPUT_GAMMA_PROPHOTO,
+        ],
         help=(
             "The output transfer function. 'linear' preserves the " +
-            "scene-referred values. 'srgb' applies the sRGB OETF for " +
-            "display-referred output."
+            "scene-referred values. 'srgb' applies the sRGB OETF, " +
+            "'rec2020' the Rec.2020 OETF, and 'prophoto' the ProPhoto " +
+            "transfer characteristic for display-referred output."
+        ),
+    )
+    parser.add_argument(
+        "-s", "--colorspace",
+        required=False,
+        default=color_convert.DEFAULT_OUTPUT_COLORSPACE,
+        choices=list(color_convert.VALID_OUTPUT_COLORSPACES),
+        help=(
+            "The output color space for the 'default' color pipeline. " +
+            "'srgb' (default), 'rec2020', or 'prophoto'. Pair with a " +
+            "matching --gamma for display-referred output. The 'model' " +
+            "color pipeline only supports 'srgb'."
         ),
     )
     parser.add_argument(
@@ -274,6 +292,7 @@ def main():
             fake=args.fake,
             color_pipeline=args.color,
             output_gamma=args.gamma,
+            output_colorspace=args.colorspace,
             exposure_offset_ev=args.exposure_offset,
             metering_headroom_ev=args.meter_headroom,
             mid_gray_target=args.mid_gray,

@@ -56,8 +56,17 @@ def macbeth():
     )
 
 
-def test_matrix_constants_roundtrip():
-    identity = color_convert.xyz_to_srgb @ color_convert.srgb_to_xyz
+@pytest.mark.parametrize(
+    "rgb_to_xyz",
+    [
+        color_convert.srgb_to_xyz,
+        color_convert.rec2020_to_xyz,
+        color_convert.prophoto_to_xyz,
+    ],
+    ids=list(color_convert.VALID_OUTPUT_COLORSPACES),
+)
+def test_matrix_constants_roundtrip(rgb_to_xyz):
+    identity = np.linalg.inv(rgb_to_xyz) @ rgb_to_xyz
     assert np.allclose(identity, np.eye(3), atol=1e-5)
 
 
@@ -73,19 +82,40 @@ def test_get_color_params(color_params):
     )
 
 
-def test_cam_to_srgb_composition(color_params):
+def test_cam_to_rgb_composition(color_params):
     # The camera to sRGB matrix must be the row-normalized dcraw composition:
     # inv(normalize_rows(xyz_to_cam @ srgb_to_xyz)).
     srgb_to_cam = XYZ_TO_CAM @ color_convert.srgb_to_xyz
     srgb_to_cam = srgb_to_cam / srgb_to_cam.sum(axis=1)[:, np.newaxis]
-    assert np.allclose(color_params.cam_to_srgb, np.linalg.inv(srgb_to_cam), atol=1e-6)
+    assert np.allclose(color_params.cam_to_rgb, np.linalg.inv(srgb_to_cam), atol=1e-6)
 
 
-def test_cam_to_srgb_white_preservation(color_params):
-    # The row normalization ensures that sRGB white maps to camera white, so
-    # the inverse maps camera white back to sRGB white.
+@pytest.mark.parametrize(
+    "output_colorspace", color_convert.VALID_OUTPUT_COLORSPACES
+)
+def test_cam_to_rgb_white_preservation(output_colorspace):
+    # The row normalization ensures that output space white maps to camera
+    # white, so the inverse maps camera white back to output space white.
+    params = color_convert.get_color_params(FakeRaw(), output_colorspace)
     white = np.ones(3, dtype=np.float32)
-    assert np.allclose(color_params.cam_to_srgb @ white, white, atol=1e-5)
+    assert np.allclose(params.cam_to_rgb @ white, white, atol=1e-5)
+
+
+@pytest.mark.parametrize(
+    "output_colorspace", color_convert.VALID_OUTPUT_COLORSPACES
+)
+def test_get_color_params_output_colorspace_composition(output_colorspace):
+    # The camera to output space matrix must be the row-normalized dcraw
+    # composition for each supported output color space.
+    params = color_convert.get_color_params(FakeRaw(), output_colorspace)
+    rgb_to_cam = XYZ_TO_CAM @ color_convert.RGB_TO_XYZ[output_colorspace]
+    rgb_to_cam = rgb_to_cam / rgb_to_cam.sum(axis=1)[:, np.newaxis]
+    assert np.allclose(params.cam_to_rgb, np.linalg.inv(rgb_to_cam), atol=1e-6)
+
+
+def test_get_color_params_invalid_colorspace():
+    with pytest.raises(ValueError, match="Invalid output color space"):
+        color_convert.get_color_params(FakeRaw(), "adobergb")
 
 
 def test_matrix_implies_daylight_whitebalance(color_params):
@@ -118,7 +148,7 @@ def test_get_color_params_zero_green():
         color_convert.get_color_params(raw)
 
 
-def test_camera_to_srgb_matrix_convention(color_params):
+def test_camera_to_rgb_matrix_convention(color_params):
     # The composite matrix must be applied as M @ v per pixel, and not as the
     # transpose, which is what a naive np.dot(arr, M) would produce.
     img_arr = np.array(
@@ -128,8 +158,8 @@ def test_camera_to_srgb_matrix_convention(color_params):
         ],
         dtype=np.float32,
     )
-    expected = np.maximum(np.stack([color_params.cam_to_srgb @ pixel for pixel in img_arr]), 0.0)
-    output = color_convert.camera_to_srgb(img_arr, color_params)
+    expected = np.maximum(np.stack([color_params.cam_to_rgb @ pixel for pixel in img_arr]), 0.0)
+    output = color_convert.camera_to_rgb(img_arr, color_params)
     assert np.allclose(output, expected)
 
 
@@ -137,9 +167,9 @@ def test_synthetic_roundtrip(color_params, macbeth):
     # Camera values constructed as the inverse of the full pipeline must be
     # recovered exactly by white balancing and color conversion.
     wb = color_params.wb_multipliers
-    camera_raw = (macbeth @ np.linalg.inv(color_params.cam_to_srgb).T) / wb
+    camera_raw = (macbeth @ np.linalg.inv(color_params.cam_to_rgb).T) / wb
 
-    output = color_convert.camera_to_srgb(
+    output = color_convert.camera_to_rgb(
         color_convert.white_balance(camera_raw, wb),
         color_params,
     )
@@ -155,7 +185,7 @@ def test_daylight_colors_recover_srgb(color_params, macbeth):
     wb_daylight = row_sums[1] / row_sums
     camera_raw = (macbeth @ srgb_to_cam.T) / row_sums[1]
 
-    output = color_convert.camera_to_srgb(
+    output = color_convert.camera_to_rgb(
         color_convert.white_balance(camera_raw, wb_daylight),
         color_params,
     )
@@ -169,7 +199,7 @@ def test_neutral_stays_neutral(color_params):
     neutral_value = 0.7
     camera_response = (neutral_value / color_params.wb_multipliers).astype(np.float32)
 
-    output = color_convert.camera_to_srgb(
+    output = color_convert.camera_to_rgb(
         color_convert.white_balance(camera_response, color_params.wb_multipliers),
         color_params,
     )
@@ -214,18 +244,18 @@ def test_linearize_invalid_range(color_params):
         color_convert.linearize(img_arr, color_params, 1.0, 1.0)
 
 
-def test_camera_to_srgb_clips_negative():
+def test_camera_to_rgb_clips_negative():
     # Out of gamut colors produce negative values which must be clipped to
     # zero, while positive values are preserved without upper clipping.
     params = color_convert.ColorTransformParameters(
         xyz_to_cam=np.eye(3, dtype=np.float32),
-        cam_to_srgb=color_convert.xyz_to_srgb,
+        cam_to_rgb=color_convert.xyz_to_srgb,
         wb_multipliers=np.ones(3, dtype=np.float32),
         black_level_per_channel=np.zeros(3, dtype=np.float32),
         white_level=1.0,
     )
     img_arr = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
-    output = color_convert.camera_to_srgb(img_arr, params)
+    output = color_convert.camera_to_rgb(img_arr, params)
     raw_output = color_convert.xyz_to_srgb @ img_arr[0]
     assert output[0, 0] == pytest.approx(raw_output[0])
     assert output[0, 0] > 1.0
@@ -245,3 +275,32 @@ def test_srgb_oetf():
     x = np.linspace(0.0, 1.0, 1000)
     y = transform.srgb_oetf(x)
     assert np.all(np.diff(y) >= 0.0)
+
+
+def test_rec2020_oetf():
+    assert transform.rec2020_oetf(0.0) == pytest.approx(0.0)
+    assert transform.rec2020_oetf(1.0) == pytest.approx(1.0)
+    # The linear segment breakpoint, where the value is 4.5 * beta.
+    beta = 0.018053968510807
+    assert transform.rec2020_oetf(beta) == pytest.approx(0.0812428582986315, abs=1e-6)
+    assert transform.rec2020_oetf(0.5) == pytest.approx(0.7054355530556183)
+
+    # The function must be continuous and monotonically increasing.
+    x = np.linspace(0.0, 1.0, 1000)
+    y = transform.rec2020_oetf(x)
+    assert np.all(np.diff(y) >= 0.0)
+    assert y[-1] == pytest.approx(1.0)
+
+
+def test_prophoto_oetf():
+    assert transform.prophoto_oetf(0.0) == pytest.approx(0.0)
+    assert transform.prophoto_oetf(1.0) == pytest.approx(1.0)
+    # The linear segment breakpoint, where the value is 16 / 512 = 1 / 32.
+    assert transform.prophoto_oetf(1 / 512) == pytest.approx(1 / 32, abs=1e-6)
+    assert transform.prophoto_oetf(0.5) == pytest.approx(0.6803950000871885)
+
+    # The function must be continuous and monotonically increasing.
+    x = np.linspace(0.0, 1.0, 1000)
+    y = transform.prophoto_oetf(x)
+    assert np.all(np.diff(y) >= 0.0)
+    assert y[-1] == pytest.approx(1.0)

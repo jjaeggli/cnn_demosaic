@@ -1,8 +1,9 @@
-# Module for color space conversion from camera RGB to sRGB.
+# Module for color space conversion from camera RGB to an RGB output color
+# space (sRGB, Rec.2020, or ProPhoto).
 #
 # This implements the standard dcraw-style conversion chain:
 #
-#   linear camera RGB -> white balance -> camera RGB -> linear sRGB
+#   linear camera RGB -> white balance -> camera RGB -> linear output RGB
 #
 # Color matrix semantics (this matters!):
 #
@@ -10,16 +11,24 @@
 # camera specific matrix that turns XYZ color into camera primaries
 # (XYZ -> camera RGB). See LibRaw's cam_xyz_coeff:
 #
-#   srgb_to_cam = cam_xyz @ srgb_to_xyz
-#   srgb_to_cam is row-normalized so that sRGB white (1, 1, 1) maps to
+#   rgb_to_cam = cam_xyz @ rgb_to_xyz
+#   rgb_to_cam is row-normalized so that output space white (1, 1, 1) maps to
 #   camera white (1, 1, 1). The reciprocal of the un-normalized row sums are
 #   the daylight white balance multipliers (pre_mul).
-#   cam_to_srgb = inv(srgb_to_cam)
+#   cam_to_rgb = inv(rgb_to_cam)
 #
 # White balance multipliers are applied to the camera RGB values before the
 # color matrix, exactly as dcraw's scale_colors precedes convert_to_rgb.
 #
+# All matrices use the D65 white point convention, matching the XYZ (D65)
+# camera matrices found in raw files. The sRGB and Rec.2020 matrices are
+# computed directly from their published primaries with a D65 white. ProPhoto
+# is natively referenced to D50, so the matrix below reuses the ProPhoto
+# primary chromaticities recomputed against a D65 white to remain consistent
+# with the D65 pipeline convention.
+#
 # Reference: https://www.numbercrunch.de/blog/2020/12/from-numbers-to-images-raw-image-processing-with-python/
+# Reference: http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
 
 from dataclasses import dataclass
 
@@ -35,9 +44,42 @@ srgb_to_xyz = np.array(
     dtype=np.float32,
 )
 
+# ITU-R BT.2020 primaries with a D65 white.
+rec2020_to_xyz = np.array(
+    [
+        [0.6369580, 0.1446169, 0.1688809],
+        [0.2627002, 0.6779981, 0.0593017],
+        [0.0000000, 0.0280727, 1.0609851],
+    ],
+    dtype=np.float32,
+)
+
+# ProPhoto (ROMM RGB) primaries with a D65 white (natively D50, see above).
+prophoto_to_xyz = np.array(
+    [
+        [0.7721473, 0.1369327, 0.0413759],
+        [0.2788236, 0.7210577, 0.0001187],
+        [0.0000000, 0.0000000, 1.0890578],
+    ],
+    dtype=np.float32,
+)
+
 # This roughly matches the sRGB D65 matrix shown here:
 # http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
 xyz_to_srgb = np.linalg.inv(srgb_to_xyz)
+
+OUTPUT_COLORSPACE_SRGB = "srgb"
+OUTPUT_COLORSPACE_REC2020 = "rec2020"
+OUTPUT_COLORSPACE_PROPHOTO = "prophoto"
+DEFAULT_OUTPUT_COLORSPACE = OUTPUT_COLORSPACE_SRGB
+
+# Registry of output color space names to their RGB -> XYZ (D65) matrices.
+RGB_TO_XYZ = {
+    OUTPUT_COLORSPACE_SRGB: srgb_to_xyz,
+    OUTPUT_COLORSPACE_REC2020: rec2020_to_xyz,
+    OUTPUT_COLORSPACE_PROPHOTO: prophoto_to_xyz,
+}
+VALID_OUTPUT_COLORSPACES = tuple(RGB_TO_XYZ)
 
 
 @dataclass
@@ -47,8 +89,8 @@ class ColorTransformParameters:
     Attributes:
         xyz_to_cam: The 3x3 matrix from the raw file which converts XYZ (D65)
             values to camera RGB values.
-        cam_to_srgb: The composite 3x3 matrix which converts white balanced
-            camera RGB values to linear sRGB values.
+        cam_to_rgb: The composite 3x3 matrix which converts white balanced
+            camera RGB values to linear RGB values in the output color space.
         wb_multipliers: Per-channel white balance multipliers, normalized so
             that the green multiplier is 1.0.
         black_level_per_channel: Per-channel sensor black level in raw units.
@@ -56,36 +98,48 @@ class ColorTransformParameters:
     """
 
     xyz_to_cam: np.ndarray
-    cam_to_srgb: np.ndarray
+    cam_to_rgb: np.ndarray
     wb_multipliers: np.ndarray
     black_level_per_channel: np.ndarray
     white_level: float
 
 
-def get_color_params(raw: rawpy.RawPy) -> ColorTransformParameters:
+def get_color_params(
+    raw: rawpy.RawPy, output_colorspace: str = DEFAULT_OUTPUT_COLORSPACE
+) -> ColorTransformParameters:
     """Extracts the color conversion parameters from an opened raw image.
 
     Args:
         raw: An opened rawpy.RawPy instance (or any object exposing the same
             color metadata attributes).
+        output_colorspace: The target output color space, one of
+            VALID_OUTPUT_COLORSPACES.
 
     Returns:
         A ColorTransformParameters instance.
     """
+    if output_colorspace not in RGB_TO_XYZ:
+        raise ValueError(
+            f"Invalid output color space [{output_colorspace}], " +
+            f"must be one of {VALID_OUTPUT_COLORSPACES}"
+        )
+    rgb_to_xyz = RGB_TO_XYZ[output_colorspace]
+
     # Despite the rawpy docstring, this matrix converts XYZ to camera RGB.
     xyz_to_cam = np.asarray(raw.rgb_xyz_matrix[:3], dtype=np.float32)
     if not np.any(xyz_to_cam):
         raise ValueError("The raw image does not contain a camera color matrix!")
 
-    # Compose the sRGB to camera RGB matrix and normalize each camera channel
-    # row so that sRGB white maps to camera white, as dcraw does in
-    # cam_xyz_coeff. The camera to sRGB matrix is the inverse of this.
-    srgb_to_cam = xyz_to_cam @ srgb_to_xyz
-    row_sums = srgb_to_cam.sum(axis=1)
+    # Compose the output color space to camera RGB matrix and normalize each
+    # camera channel row so that output space white maps to camera white, as
+    # dcraw does in cam_xyz_coeff. The camera to output space matrix is the
+    # inverse of this.
+    rgb_to_cam = xyz_to_cam @ rgb_to_xyz
+    row_sums = rgb_to_cam.sum(axis=1)
     if np.any(row_sums <= 1e-5):
         raise ValueError("The camera color matrix contains a degenerate channel row!")
-    srgb_to_cam = srgb_to_cam / row_sums[:, np.newaxis]
-    cam_to_srgb = np.linalg.inv(srgb_to_cam)
+    rgb_to_cam = rgb_to_cam / row_sums[:, np.newaxis]
+    cam_to_rgb = np.linalg.inv(rgb_to_cam)
 
     camera_whitebalance = np.asarray(raw.camera_whitebalance, dtype=np.float32)[:3]
     if camera_whitebalance[1] == 0:
@@ -98,7 +152,7 @@ def get_color_params(raw: rawpy.RawPy) -> ColorTransformParameters:
 
     return ColorTransformParameters(
         xyz_to_cam=xyz_to_cam,
-        cam_to_srgb=cam_to_srgb,
+        cam_to_rgb=cam_to_rgb,
         wb_multipliers=wb_multipliers,
         black_level_per_channel=black_level_per_channel,
         white_level=float(raw.white_level),
@@ -137,21 +191,23 @@ def white_balance(img_arr, wb_multipliers):
     return img_arr * np.asarray(wb_multipliers)
 
 
-def camera_to_srgb(img_arr, params: ColorTransformParameters):
-    """Converts white-balanced linear camera RGB values to linear sRGB.
+def camera_to_rgb(img_arr, params: ColorTransformParameters):
+    """Converts white-balanced linear camera RGB values to the output color space.
 
     The input values are expected to be linear camera RGB values which have
     already been white balanced and linearized. The composite camera RGB to
-    sRGB matrix is applied per pixel. As with dcraw, any resulting negative
-    values are clipped to zero. Upper values are not clipped, so that the
-    full dynamic range is preserved for floating point output formats.
+    output color space matrix is applied per pixel. As with dcraw, any
+    resulting negative values are clipped to zero. Upper values are not
+    clipped, so that the full dynamic range is preserved for floating point
+    output formats.
 
     Args:
         img_arr: An (H, W, 3) or (N, 3) array of white balanced camera RGB values.
         params: The ColorTransformParameters for the image.
 
     Returns:
-        An array of linear sRGB values in the same shape as the input.
+        An array of linear RGB values in the output color space, in the same
+        shape as the input.
     """
-    output_arr = np.einsum("ij,...j->...i", params.cam_to_srgb, np.asarray(img_arr))
+    output_arr = np.einsum("ij,...j->...i", params.cam_to_rgb, np.asarray(img_arr))
     return np.maximum(output_arr, 0.0)

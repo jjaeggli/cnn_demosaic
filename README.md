@@ -16,7 +16,7 @@ This approach will be slower than Markesteijn, by at least one order of magnitud
 
 - [x] Output as 16-bit floating point OpenEXR images
 - [x] Output as 16-bit integer TIFF images
-- [x] Color-space conversion from *camera RGB* to *sRGB* using the camera color matrix and white balance from the raw file (dcraw-style)
+- [x] Color-space conversion from *camera RGB* to *sRGB*, *Rec.2020*, or *ProPhoto* using the camera color matrix and white balance from the raw file (dcraw-style)
 - [ ] Include image metadata in output
 - [ ] Train X-Trans models with noise-augmented images for combined ISO-optimized de-noise and demosaicing
 - [ ] Train Bayer models
@@ -71,17 +71,42 @@ pip install .
 
 Two color processing pipelines are available, selected with the `--color` option:
 
-- `default` (the default): Performs white balance and camera RGB to sRGB conversion
+- `default` (the default): Performs white balance and camera RGB to output color space conversion
   deterministically, following the same approach as dcraw. The image values are linearized
   using the sensor black and white levels, white balanced with the as-shot camera multipliers,
-  and converted to linear sRGB using the camera color matrix embedded in the raw file. Tone
-  mapping is then applied using the learned exposure model.
+  and converted to the output color space using the camera color matrix embedded in the raw file.
+  Tone mapping is then applied using the learned exposure model.
 - `model`: Uses the learned white balance and color transform models. This was the original
-  experimental approach and is retained for comparison.
+  experimental approach and is retained for comparison. The shipped model weights were trained
+  to output sRGB, so this pipeline only supports sRGB output.
 
-OpenEXR output contains tone mapped linear sRGB values (the sRGB transfer function is not
-applied), and the EXR format does not record the color primaries. For display-referred sRGB
-encoding, `cnn_demosaic.transform.srgb_oetf` can be applied to the linear values.
+### Output color space
+
+The `default` color pipeline supports three output color spaces, selected with the
+`--colorspace` option:
+
+- `srgb` (the default)
+- `rec2020`: ITU-R BT.2020 primaries
+- `prophoto`: ProPhoto (ROMM RGB) primaries
+
+All output color spaces use a D65 white point convention, matching the XYZ camera matrices
+embedded in raw files. (ProPhoto is natively referenced to D50; the implementation reuses the
+ProPhoto primaries recomputed against D65 for consistency with the rest of the pipeline.)
+
+The output transfer function is selected independently with the `--gamma` option: `linear`
+(default, preserves the scene-referred values, appropriate for floating point EXR), `srgb`
+(the sRGB OETF), `rec2020` (the Rec.2020 OETF), or `prophoto` (the ProPhoto/ROMM transfer
+characteristic). Pair the transfer function with the matching color space for
+display-referred output, for example:
+
+```
+cnn_demosaic --colorspace rec2020 --gamma rec2020 path/to/image/DSCF0001.RAF
+```
+
+OpenEXR output contains tone mapped linear values in the selected color space (no transfer
+function is applied), and the EXR format does not record the color primaries. For
+display-referred encoding, the matching OETF from `cnn_demosaic.transform` (for example
+`srgb_oetf`) can be applied to the linear values.
 
 Images are currently output in the 16-bit floating point OpenEXR format. This provides a great deal
 of flexibility for adjusting the output levels and preserving the dynamic range, as demosaicing is

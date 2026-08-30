@@ -1,6 +1,17 @@
 from cnn_demosaic import exposure
 from cnn_demosaic import output
-from cnn_demosaic.transform import OUTPUT_GAMMA_LINEAR, OUTPUT_GAMMA_SRGB
+from cnn_demosaic.color_convert import (
+    DEFAULT_OUTPUT_COLORSPACE,
+    OUTPUT_COLORSPACE_PROPHOTO,
+    OUTPUT_COLORSPACE_REC2020,
+    OUTPUT_COLORSPACE_SRGB,
+)
+from cnn_demosaic.transform import (
+    OUTPUT_GAMMA_LINEAR,
+    OUTPUT_GAMMA_PROPHOTO,
+    OUTPUT_GAMMA_REC2020,
+    OUTPUT_GAMMA_SRGB,
+)
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -24,6 +35,7 @@ class Config:
     demosaic_weights: str | None = None
     white_balance_weights: str | None = None
     output_gamma: str = OUTPUT_GAMMA_LINEAR
+    output_colorspace: str = DEFAULT_OUTPUT_COLORSPACE
     exposure_offset_ev: float = exposure.DEFAULT_EXPOSURE_OFFSET_EV
     metering_headroom_ev: float = exposure.DEFAULT_METERING_HEADROOM_EV
     mid_gray_target: float = exposure.DEFAULT_MID_GRAY
@@ -34,7 +46,17 @@ class Config:
     fake: bool = False
 
     VALID_COLOR_PIPELINES = (COLOR_PIPELINE_DEFAULT, COLOR_PIPELINE_MODEL)
-    VALID_OUTPUT_GAMMAS = (OUTPUT_GAMMA_LINEAR, OUTPUT_GAMMA_SRGB)
+    VALID_OUTPUT_GAMMAS = (
+        OUTPUT_GAMMA_LINEAR,
+        OUTPUT_GAMMA_SRGB,
+        OUTPUT_GAMMA_REC2020,
+        OUTPUT_GAMMA_PROPHOTO,
+    )
+    VALID_OUTPUT_COLORSPACES = (
+        OUTPUT_COLORSPACE_SRGB,
+        OUTPUT_COLORSPACE_REC2020,
+        OUTPUT_COLORSPACE_PROPHOTO,
+    )
 
     def __post_init__(self):
         self.raw_path = Path(self.raw_filename)
@@ -79,6 +101,21 @@ class Config:
             raise ValueError(
                 f"Invalid output gamma [{self.output_gamma}], " +
                 f"must be one of {self.VALID_OUTPUT_GAMMAS}"
+            )
+        if self.output_colorspace not in self.VALID_OUTPUT_COLORSPACES:
+            raise ValueError(
+                f"Invalid output color space [{self.output_colorspace}], " +
+                f"must be one of {self.VALID_OUTPUT_COLORSPACES}"
+            )
+        # The learned color transform model was trained to output sRGB values.
+        if (
+            self.color_pipeline == COLOR_PIPELINE_MODEL
+            and self.output_colorspace != OUTPUT_COLORSPACE_SRGB
+        ):
+            raise ValueError(
+                f"The '{COLOR_PIPELINE_MODEL}' color pipeline only supports " +
+                f"'{OUTPUT_COLORSPACE_SRGB}' output color space, " +
+                f"got '{self.output_colorspace}'"
             )
 
         validate_weights_path(self.demosaic_weights_path)
