@@ -118,8 +118,12 @@ def post_process(img_arr, wb_matrix, cfg: config.Config):
 
 
 def post_process_default(
-    img_arr, color_params, exposure_processor: exposure.Exposure,
-    norm_min, norm_max, cfg: config.Config
+    img_arr,
+    color_params,
+    exposure_processor: exposure.Exposure,
+    norm_min,
+    norm_max,
+    cfg: config.Config,
 ):
     """Performs color conversion using the camera color matrix and white balance.
 
@@ -193,43 +197,39 @@ def main():
     parser.add_argument("-n", "--nopost", required=False, default=False, action="store_true")
     parser.add_argument("-m", "--monochrome", required=False, default=False, action="store_true")
     parser.add_argument(
-        "-x", "--color",
+        "-x",
+        "--color",
         required=False,
         default=config.COLOR_PIPELINE_DEFAULT,
         choices=[config.COLOR_PIPELINE_DEFAULT, config.COLOR_PIPELINE_MODEL],
         help=(
-            "The color processing pipeline to use. 'default' uses the camera " +
-            "color matrix from the raw file. 'model' uses a white balance and " +
-            "color transform models."
+            "The color processing pipeline to use. 'default' uses the camera "
+            + "color matrix from the raw file. 'model' uses a white balance and "
+            + "color transform models."
         ),
     )
     parser.add_argument(
-        "-g", "--gamma",
+        "-l",
+        "--linear",
         required=False,
-        default=transform.OUTPUT_GAMMA_LINEAR,
-        choices=[
-            transform.OUTPUT_GAMMA_LINEAR,
-            transform.OUTPUT_GAMMA_SRGB,
-            transform.OUTPUT_GAMMA_REC2020,
-            transform.OUTPUT_GAMMA_PROPHOTO,
-        ],
+        default=False,
+        action="store_true",
         help=(
-            "The output transfer function. 'linear' preserves the " +
-            "scene-referred values. 'srgb' applies the sRGB OETF, " +
-            "'rec2020' the Rec.2020 OETF, and 'prophoto' the ProPhoto " +
-            "transfer characteristic for display-referred output."
+            "Emit scene-referred linear values instead of encoding them "
+            "with the transfer function matching the output color space."
         ),
     )
     parser.add_argument(
-        "-s", "--colorspace",
+        "-s",
+        "--colorspace",
         required=False,
         default=color_convert.DEFAULT_OUTPUT_COLORSPACE,
         choices=list(color_convert.VALID_OUTPUT_COLORSPACES),
         help=(
-            "The output color space for the 'default' color pipeline. " +
-            "'srgb' (default), 'rec2020', or 'prophoto'. Pair with a " +
-            "matching --gamma for display-referred output. The 'model' " +
-            "color pipeline only supports 'srgb'."
+            "The output color space for the 'default' color pipeline. "
+            "'srgb' (default), 'rec2020', or 'prophoto'. The values are "
+            "encoded with the matching transfer function unless --linear "
+            "is set. The 'model' color pipeline only supports 'srgb'."
         ),
     )
     parser.add_argument(
@@ -245,8 +245,8 @@ def main():
         type=float,
         default=exposure.DEFAULT_METERING_HEADROOM_EV,
         help=(
-            "The number of stops between the metered mid-gray and sensor " +
-            "clipping, used to determine the standard exposure."
+            "The number of stops between the metered mid-gray and sensor "
+            + "clipping, used to determine the standard exposure."
         ),
     )
     parser.add_argument(
@@ -273,7 +273,7 @@ def main():
 
     # If the path starts with an '@' symbol, this indicates that it contains a range
     # expression and should be expanded.
-    if args.raw_filename.startswith('@'):
+    if args.raw_filename.startswith("@"):
         # If a path expression is supplied, args.output will be ignored.
         output_path = None
         processing_paths = path_parser.parse_path_statement(args.raw_filename[1:])
@@ -282,7 +282,7 @@ def main():
         # Create a new configuration for each processed raw file.
         # This ensures that raw_path and output_path are correctly set for the current iteration.
         current_processing_config = config.Config(
-            raw_file_path_str, # Use the string path for the current file
+            raw_file_path_str,  # Use the string path for the current file
             output_filename=output_path,
             format=args.format,
             demosaic_weights=args.weights,
@@ -291,7 +291,7 @@ def main():
             monochrome=args.monochrome,
             fake=args.fake,
             color_pipeline=args.color,
-            output_gamma=args.gamma,
+            output_linear=args.linear,
             output_colorspace=args.colorspace,
             exposure_offset_ev=args.exposure_offset,
             metering_headroom_ev=args.meter_headroom,

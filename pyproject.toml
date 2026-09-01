@@ -14,7 +14,7 @@ version = "0.0.1"
 
 description = "Demosaicing for X-Trans and Bayer sensors using convolutional neural networks."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.13,<3.14"
 license = { file = "LICENSE" }
 keywords = ["demosaic", "X-Trans", "xtrans", "raw"]
 authors = [{ name = "Jacob A. Jaeggli" }]
@@ -32,21 +32,18 @@ classifiers = [
     "Environment :: Console",
     "Environment :: GPU :: NVIDIA CUDA",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
 ]
 
 dependencies = [
     "tqdm",
+    "tifffile",
     "numpy",
     "opencv-python",
     "rawpy>=0.24",
     "streamlit",
-    "tensorflow[and-cuda]",
+    "tensorflow[and-cuda]~=2.21.0",
     "Pillow",
     "pyexr>=0.5",
 ]
@@ -74,6 +71,7 @@ cnn_demosaic = "cnn_demosaic.process_raw:main"
 
 [tool.setuptools.package-data]
 "cnn_demosaic.weights" = ["*.h5"]
+"cnn_demosaic.profiles" = ["*.icc"]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -82,5 +80,5 @@ cnn_demosaic = "cnn_demosaic.process_raw:main"
 line-length = 100
 indent-width = 4
 
-# Assume Python 3.9
-target-version = "py39"
+# Assume Python 3.13
+target-version = "py313"
