@@ -1,5 +1,7 @@
 import pytest
+
 from cnn_demosaic.util.path_parser import parse_path_statement
+
 
 def test_single_path():
     """Test with a single, simple path."""

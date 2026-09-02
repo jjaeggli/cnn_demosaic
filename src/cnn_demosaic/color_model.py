@@ -1,12 +1,9 @@
 import tensorflow as tf
-
-from cnn_demosaic import transform
-from cnn_demosaic.color_convert import srgb_to_xyz, xyz_to_srgb
 from tensorflow import keras
 from tensorflow.keras import layers
 
-from cnn_demosaic.model import create_model
-
+from cnn_demosaic import transform
+from cnn_demosaic.color_convert import srgb_to_xyz, xyz_to_srgb
 
 # Export the sRGB to XYZ and XYZ to sRGB matrices for use by the learned color
 # models.
@@ -15,7 +12,7 @@ __all__ = ["srgb_to_xyz", "xyz_to_srgb"]
 
 class XyzToSrgbLayer(layers.Layer):
     def __init__(self, color_ch=3):
-        super(XyzToSrgbLayer, self).__init__()
+        super().__init__()
         self.color_ch = color_ch
 
     def build(self, input_shape):
@@ -27,7 +24,7 @@ class XyzToSrgbLayer(layers.Layer):
 
 class ColorTransformLayer(layers.Layer):
     def __init__(self, color_ch=3):
-        super(ColorTransformLayer, self).__init__()
+        super().__init__()
         self.color_ch = color_ch
 
     def build(self, input_shape):
@@ -39,7 +36,7 @@ class ColorTransformLayer(layers.Layer):
 
 class MultiColorTransformLayer(layers.Layer):
     def __init__(self, **kwargs):
-        super(MultiColorTransformLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def build(self, input_shape):
         self.w = self.add_weight(shape=(3, 3), initializer="random_normal", trainable=True)
@@ -58,7 +55,7 @@ class MultiColorTransformLayer(layers.Layer):
 # Applies a channel independent s-curve to the image.
 class ColorCurveAdjLayer(layers.Layer):
     def __init__(self, color_ch=3):
-        super(ColorCurveAdjLayer, self).__init__()
+        super().__init__()
         self.color_ch = color_ch
 
     def build(self, input_shape):

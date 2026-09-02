@@ -1,5 +1,6 @@
 import re
-from typing import Iterator
+from collections.abc import Iterator
+
 
 def parse_path_statement(path_statement: str) -> Iterator[str]:
     """

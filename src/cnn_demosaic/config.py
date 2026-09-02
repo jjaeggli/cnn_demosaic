@@ -1,6 +1,8 @@
-from cnn_demosaic import exposure
-from cnn_demosaic import icc
-from cnn_demosaic import output
+from dataclasses import dataclass
+from importlib import resources
+from pathlib import Path
+
+from cnn_demosaic import exposure, icc, output
 from cnn_demosaic.color_convert import (
     DEFAULT_OUTPUT_COLORSPACE,
     OUTPUT_COLORSPACE_PROPHOTO,
@@ -8,9 +10,6 @@ from cnn_demosaic.color_convert import (
     OUTPUT_COLORSPACE_SRGB,
 )
 from cnn_demosaic.transform import OUTPUT_GAMMA_LINEAR
-from dataclasses import dataclass
-from importlib import resources
-from pathlib import Path
 
 WEIGHTS_MODULE = "cnn_demosaic.weights"
 DEMOSAIC_WEIGHTS = "x-trans.weights.h5"
@@ -138,7 +137,10 @@ class Config:
 
 def get_weights_resource_path(resource: str | None, default: str):
     resource_or_default = default if resource is None else resource
-    resource_path = Path(resources.files(WEIGHTS_MODULE).joinpath(resource_or_default))
+    # Traversable is not guaranteed to be a filesystem path, but the package
+    # data used here is always extracted on disk.
+    traversable = resources.files(WEIGHTS_MODULE).joinpath(resource_or_default)
+    resource_path = Path(str(traversable))
     return resource_path
 
 
@@ -176,5 +178,5 @@ def get_format(format_arg, output_arg):
                 f"Conflict between specified format and output file suffix: [{output_suffix}]"
             )
     if format_suffix is None:
-        return output.IMG_FORMATS[output.EXR_FORMAT]
+        return output.IMG_FORMATS[output.TIFF_FORMAT]
     return format_suffix, format_writer

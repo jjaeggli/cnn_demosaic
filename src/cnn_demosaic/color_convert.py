@@ -30,10 +30,11 @@
 # Reference: https://www.numbercrunch.de/blog/2020/12/from-numbers-to-images-raw-image-processing-with-python/
 # Reference: http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
-import rawpy
 
 srgb_to_xyz = np.array(
     [
@@ -82,6 +83,26 @@ RGB_TO_XYZ = {
 VALID_OUTPUT_COLORSPACES = tuple(RGB_TO_XYZ)
 
 
+class RawColorMetadata(Protocol):
+    """The color metadata attributes of rawpy.RawPy used for conversion.
+
+    A structural type so that test doubles which expose the same attributes
+    are accepted, since rawpy does not export RawPy for typing.
+    """
+
+    @property
+    def rgb_xyz_matrix(self) -> np.ndarray: ...
+
+    @property
+    def camera_whitebalance(self) -> Sequence[float] | np.ndarray: ...
+
+    @property
+    def black_level_per_channel(self) -> Sequence[float] | np.ndarray: ...
+
+    @property
+    def white_level(self) -> float: ...
+
+
 @dataclass
 class ColorTransformParameters:
     """Color conversion parameters extracted from a raw image.
@@ -105,7 +126,7 @@ class ColorTransformParameters:
 
 
 def get_color_params(
-    raw: rawpy.RawPy, output_colorspace: str = DEFAULT_OUTPUT_COLORSPACE
+    raw: RawColorMetadata, output_colorspace: str = DEFAULT_OUTPUT_COLORSPACE
 ) -> ColorTransformParameters:
     """Extracts the color conversion parameters from an opened raw image.
 

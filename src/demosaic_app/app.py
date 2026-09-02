@@ -1,18 +1,12 @@
 # Application which allows adjusting the processing parameters of an image.
 
+import argparse
+
 import numpy as np
 import pyexr
 import streamlit as st
 
-from cnn_demosaic import color
-from cnn_demosaic import color_model
-from cnn_demosaic import config
-from cnn_demosaic import exposure
-from cnn_demosaic import transform
-from cnn_demosaic import types
-
-import argparse
-
+from cnn_demosaic import color, color_model, config, exposure, transform, types
 from demosaic_app import operations
 
 # Test image file path.
@@ -80,7 +74,7 @@ def main_app(exr_path):
         st.session_state["img_height"] = img_height
 
     if "thumbnail_base" not in st.session_state:
-        exr_img = pyexr.read(exr_path)[:, :, :3]
+        exr_img = np.asarray(pyexr.read(exr_path))[:, :, :3]
         thumb_base = operations.create_thumbnail(exr_img)
         st.session_state["thumbnail_base"] = thumb_base
 
@@ -188,7 +182,6 @@ def main_app(exr_path):
                 index=0,
                 key="selectbox_color1",  # Unique key for the widget
             )
-            color1_rgb = COLOR_MODELS[color1_name]
             curr_image1_np = np.asarray(apply_color_model(exp_tensor, color1_name))
             st.image(curr_image1_np, caption="Image 1", use_container_width=True)
 
@@ -200,7 +193,6 @@ def main_app(exr_path):
                 key="selectbox_color2",  # Unique key for the widget
             )
 
-            color2_rgb = COLOR_MODELS[color2_name]
             curr_image2_np = np.asarray(apply_color_model(exp_tensor, color2_name))
             st.image(curr_image2_np, caption="Image 2", use_container_width=True)
 

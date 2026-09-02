@@ -2,7 +2,6 @@ import numpy as np
 import pyexr
 import tifffile
 
-
 EXR_FORMAT = "exr"
 TIFF_FORMAT = "tiff"
 EXR_SUFFIX = ".exr"
@@ -66,7 +65,9 @@ def write_exr(output_arr: np.ndarray, output_path, icc_profile: bytes | None = N
         str(output_path),
         output_arr,
         precision=pyexr.HALF,
-        channel_names=channels_spec,
+        # pyexr's type annotation for channel_names is incorrect; its internal
+        # _get_channel_names helper accepts a plain list of channel names.
+        channel_names=channels_spec,  # type: ignore[arg-type]
     )
 
 

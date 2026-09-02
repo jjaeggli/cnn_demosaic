@@ -87,4 +87,6 @@ def test_output_handler_embeds_icc_profile(raw_file, tmp_path):
 
     expected_profile = icc.get_icc_profile(False, config.DEFAULT_OUTPUT_COLORSPACE)
     with tifffile.TiffFile(output_path) as tif:
-        assert tif.pages[0].tags["InterColorProfile"].value == expected_profile
+        page = tif.pages[0]
+        assert isinstance(page, tifffile.TiffPage)
+        assert page.tags["InterColorProfile"].value == expected_profile

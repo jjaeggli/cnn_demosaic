@@ -2,6 +2,7 @@
 
 import numpy as np
 from tqdm import tqdm
+
 from cnn_demosaic.profile import profile
 
 # TODO(jjaeggli): add progress callback for UI.

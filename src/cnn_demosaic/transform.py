@@ -49,7 +49,7 @@ def adj_levels_per_tile_fn(image_array):
 def s_curve(image_array: np.ndarray, midpoint=0.5, slope=1.0, contrast=1.0):
     """Applies an s-curve function the the array."""
     if not isinstance(image_array, np.ndarray):
-        raise ValueError("Input must be a NumPy array.")
+        raise TypeError("Input must be a NumPy array.")
     output_array = (image_array - midpoint) * contrast
     output_array = 1 / (1 + np.exp(-slope * output_array))
     output_array = np.clip(output_array, 0, 1)

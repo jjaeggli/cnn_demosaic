@@ -1,5 +1,5 @@
-import numpy as np
 import cv2
+import numpy as np
 
 
 def create_thumbnail(image_array: np.ndarray, size: tuple = (256, 256)) -> np.ndarray:

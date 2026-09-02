@@ -8,7 +8,7 @@ DENSE_LAYERS = 16
 
 class LogNormalizationLayer(layers.Layer):
     def __init__(self, axis=1, epsilon=1e-6, **kwargs):
-        super(LogNormalizationLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.axis = axis
         self.epsilon = epsilon
 
@@ -24,7 +24,7 @@ class LogNormalizationLayer(layers.Layer):
         return normalized_output
 
     def get_config(self):
-        config = super(LogNormalizationLayer, self).get_config()
+        config = super().get_config()
         config.update(
             {
                 "axis": self.axis,

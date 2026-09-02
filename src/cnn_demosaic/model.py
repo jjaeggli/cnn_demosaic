@@ -1,10 +1,19 @@
 # Defines models and model creation.
+from typing import Literal
+
 import numpy as np
 from tensorflow import keras
 from tensorflow.keras import layers
 
 
-def residual_block(x, filters, kernel_size=3, strides=1, padding="same", activation="relu"):
+def residual_block(
+    x,
+    filters,
+    kernel_size=3,
+    strides=1,
+    padding: Literal["valid", "same"] = "same",
+    activation="relu",
+):
     """Creates a residual block."""
     residual = x
     x = layers.Conv2D(filters, kernel_size, strides, padding=padding)(x)

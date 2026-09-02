@@ -74,7 +74,9 @@ def test_write_tiff_embeds_icc_profile(tmp_path, output_linear, output_colorspac
     output.write_tiff(arr, path, icc_profile=profile)
 
     with tifffile.TiffFile(path) as tif:
-        assert tif.pages[0].tags["InterColorProfile"].value == profile
+        page = tif.pages[0]
+        assert isinstance(page, tifffile.TiffPage)
+        assert page.tags["InterColorProfile"].value == profile
     with Image.open(path) as img:
         assert img.info.get("icc_profile") == profile
 
@@ -86,7 +88,9 @@ def test_write_tiff_monochrome_ignores_icc_profile(tmp_path):
     output.write_tiff(arr, path, icc_profile=profile)
 
     with tifffile.TiffFile(path) as tif:
-        assert "InterColorProfile" not in tif.pages[0].tags
+        page = tif.pages[0]
+        assert isinstance(page, tifffile.TiffPage)
+        assert "InterColorProfile" not in page.tags
 
 
 def test_write_exr_ignores_icc_profile(tmp_path):
@@ -98,7 +102,7 @@ def test_write_exr_ignores_icc_profile(tmp_path):
 
     import pyexr
 
-    loaded = pyexr.read(str(path))[:, :, :3]
+    loaded = np.asarray(pyexr.read(str(path)))[:, :, :3]
     assert np.allclose(loaded, arr)
 
 
@@ -186,7 +190,9 @@ def test_icc_profile_colorimetry_in_littlecms(output_colorspace):
     for channel_index, channel in enumerate("rgb"):
         image = Image.new("RGB", (1, 1))
         image.putpixel((0, 0), tuple(255 if i == channel_index else 0 for i in range(3)))
-        result = ImageCms.applyTransform(image, transform_cmm).getpixel((0, 0))
+        result_img = ImageCms.applyTransform(image, transform_cmm)
+        assert result_img is not None
+        result = result_img.getpixel((0, 0))
         assert result == tuple(255 if i == channel_index else 0 for i in range(3)), channel
 
     ramp = Image.new("RGB", (256, 1))
@@ -218,5 +224,5 @@ def test_write_exr_preserves_range(tmp_path):
 
     import pyexr
 
-    loaded = pyexr.read(str(path))[:, :, :3]
+    loaded = np.asarray(pyexr.read(str(path)))[:, :, :3]
     assert np.allclose(loaded, arr)

@@ -93,11 +93,11 @@ All output color spaces use a D65 white point convention, matching the XYZ camer
 embedded in raw files. (ProPhoto is natively referenced to D50; the implementation reuses the
 ProPhoto primaries recomputed against D65 for consistency with the rest of the pipeline.)
 
-The output transfer function follows the selected color space: by default the
+The output transfer function follows the selected color space. By default,
 values are encoded with the matching transfer function (`srgb` applies the sRGB
 OETF, `rec2020` the Rec.2020 OETF, and `prophoto` the ProPhoto/ROMM transfer
 characteristic) producing display-referred output. The `--linear` flag selects
-scene-referred output instead, preserving the linear values, for example:
+scene-referred output instead, preserving the linear values. For example:
 
 ```
 cnn_demosaic --colorspace rec2020 path/to/image/DSCF0001.RAF

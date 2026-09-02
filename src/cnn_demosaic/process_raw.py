@@ -3,29 +3,44 @@
 import argparse
 import logging
 import math
+from importlib import resources
+from typing import Protocol
+
 import numpy as np
 import rawpy
 import tensorflow as tf
-
-from cnn_demosaic import color_model
-from cnn_demosaic import color_convert
-from cnn_demosaic import config
-from cnn_demosaic import exposure
-from cnn_demosaic.color import WhiteBalance, ColorTransform, MonochromeTransform
-from cnn_demosaic.demosaic import Demosaic
-from cnn_demosaic.types import MonochromeParameters
-from cnn_demosaic import model
-from cnn_demosaic import output
-from importlib import resources
-from cnn_demosaic import transform
-from cnn_demosaic.util import path_parser
 from tensorflow import keras
 
+from cnn_demosaic import color_convert, color_model, config, exposure, model, transform
+from cnn_demosaic.color import ColorTransform, MonochromeTransform, WhiteBalance
+from cnn_demosaic.demosaic import Demosaic
+from cnn_demosaic.types import MonochromeParameters
+from cnn_demosaic.util import path_parser
 
 WEIGHTS_MODULE = "cnn_demosaic.weights"
 DEFAULT_WEIGHTS = "x-trans.weights.h5"
 COLOR_WEIGHTS = "color.weights.h5"
 RAF_SUFFIX = ".raf"
+
+
+class RawImageSizes(Protocol):
+    """The attributes of rawpy.ImageSizes used for cropping.
+
+    A structural type so that rawpy does not need to be imported for typing,
+    since rawpy does not export ImageSizes.
+    """
+
+    @property
+    def height(self) -> int: ...
+
+    @property
+    def width(self) -> int: ...
+
+    @property
+    def left_margin(self) -> int: ...
+
+    @property
+    def top_margin(self) -> int: ...
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -157,7 +172,7 @@ def post_process_bw(img_arr, exposure_processor: exposure.Exposure, cfg: config.
     return output_arr
 
 
-def crop_image(img_arr, img_sizes: rawpy.ImageSizes):
+def crop_image(img_arr, img_sizes: RawImageSizes):
     height = img_sizes.height
     width = img_sizes.width
     col_start = img_sizes.left_margin
@@ -170,7 +185,7 @@ def crop_image(img_arr, img_sizes: rawpy.ImageSizes):
     return img_arr[row_start:row_end, col_start:col_end]
 
 
-def crop_image_xe2_jpeg(img_arr, img_sizes: rawpy.ImageSizes):
+def crop_image_xe2_jpeg(img_arr, img_sizes: RawImageSizes):
     col_offset = 19
     row_offset = 16
     width = 4896

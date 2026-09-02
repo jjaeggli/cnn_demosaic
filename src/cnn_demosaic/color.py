@@ -14,14 +14,16 @@ class Color:
     @profile()
     def process(self, img_arr, wb_matrix):
         orig_shape = img_arr.shape
-        # Compute the histogram.
         img_linear_arr = None
         if len(img_arr.shape) == 3 and img_arr.shape[-1] == 3:
             # The input shape is assumed to be a 2D RGB array.
             new_shape = (img_arr.shape[0] * img_arr.shape[1], 3)
             img_linear_arr = tf.reshape(img_arr, new_shape)
-        elif len(img_arr.shape) == 3 and img_arr.shape[-1] == 3:
+        elif len(img_arr.shape) == 2 and img_arr.shape[-1] == 3:
+            # The input shape is a linear (n, 3) RGB array.
             img_linear_arr = img_arr
+        else:
+            raise ValueError(f"Invalid input image shape: {orig_shape}")
 
         wb_matrix_full = np.full_like(img_linear_arr, wb_matrix)
         process_arr = np.concatenate((img_linear_arr, wb_matrix_full), axis=1)
