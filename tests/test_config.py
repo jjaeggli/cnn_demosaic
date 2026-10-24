@@ -32,25 +32,6 @@ def test_invalid_output_colorspace(raw_file):
         cfg.validate_config()
 
 
-def test_model_pipeline_requires_srgb_output(raw_file):
-    cfg = make_config(
-        raw_file,
-        color_pipeline=config.COLOR_PIPELINE_MODEL,
-        output_colorspace=config.OUTPUT_COLORSPACE_REC2020,
-    )
-    with pytest.raises(ValueError, match="only supports 'srgb'"):
-        cfg.validate_config()
-
-
-def test_model_pipeline_allows_srgb_output(raw_file):
-    cfg = make_config(
-        raw_file,
-        color_pipeline=config.COLOR_PIPELINE_MODEL,
-        output_colorspace=config.OUTPUT_COLORSPACE_SRGB,
-    )
-    assert cfg.output_colorspace == config.OUTPUT_COLORSPACE_SRGB
-
-
 def test_default_output_colorspace(raw_file):
     cfg = make_config(raw_file)
     assert cfg.output_colorspace == config.DEFAULT_OUTPUT_COLORSPACE

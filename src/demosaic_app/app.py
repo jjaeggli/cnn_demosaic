@@ -6,21 +6,11 @@ import numpy as np
 import pyexr
 import streamlit as st
 
-from cnn_demosaic import color, color_model, config, exposure, transform, types
+from cnn_demosaic import color, exposure, transform, types
 from demosaic_app import operations
 
 # Test image file path.
 INPUT_EXR_PATH = "/home/jake/git/cnn_demosaic/assets/DSCF5657.exr"
-
-
-USE_COLOR_MODEL = False
-
-# TODO(jjaeggli): Catalog available weights in the weights module.
-COLOR_MODELS = {
-    "Color": "color_transform.weights.h5",
-    "Landscape": "color_transform_landscape.weights.h5",
-}
-
 
 def get_exposure_processor():
     if "exp" not in st.session_state:
@@ -45,24 +35,6 @@ def auto_button_click():
     pass
     # TODO(jjaeggli): Reset levels to auto-level parameters.
 
-
-def get_color_processor(model_key):
-    session_key = f"col_{model_key}"
-    if session_key not in st.session_state:
-        weights_path = config.get_weights_resource_path(None, COLOR_MODELS[model_key])
-        col_model = color_model.create_color_transform_model(weights_path)
-        col = color.ColorTransform(col_model)
-        st.session_state[session_key] = col
-        return col
-    else:
-        return st.session_state[session_key]
-
-
-def apply_color_model(img_tensor, model_key):
-    col = get_color_processor(model_key)
-    return col.process(img_tensor)
-
-
 def main_app(exr_path):
     st.title("Process Image")
 
@@ -80,9 +52,6 @@ def main_app(exr_path):
 
     img_width = st.session_state["img_width"]
     img_height = st.session_state["img_height"]
-
-    curr_image1_np = None
-    curr_image2_np = None
 
     st.subheader("Levels")
 
@@ -168,49 +137,6 @@ def main_app(exr_path):
     exp_tensor = transform.tf_clip_fn(exp_tensor)
     exp_thumbnail = np.asarray(exp_tensor)
     st.image(exp_thumbnail, use_container_width=True)
-
-    # TODO(jjaeggli): Apply the levels to the base thumbnail, and display the luma channel.
-
-    if USE_COLOR_MODEL:
-
-        st.subheader("Color Models")
-        col1, col2 = st.columns(2)
-        with col1:
-            color1_name = st.selectbox(
-                "Select model",
-                list(COLOR_MODELS.keys()),  # Options are the color names
-                index=0,
-                key="selectbox_color1",  # Unique key for the widget
-            )
-            curr_image1_np = np.asarray(apply_color_model(exp_tensor, color1_name))
-            st.image(curr_image1_np, caption="Image 1", use_container_width=True)
-
-        with col2:
-            color2_name = st.selectbox(
-                "Select model",
-                list(COLOR_MODELS.keys()),  # Options are the color names
-                index=0,
-                key="selectbox_color2",  # Unique key for the widget
-            )
-
-            curr_image2_np = np.asarray(apply_color_model(exp_tensor, color2_name))
-            st.image(curr_image2_np, caption="Image 2", use_container_width=True)
-
-        st.subheader("Blending Control")
-        percentage = st.slider(
-            "Color balance",
-            0,
-            100,
-            st.session_state["default_percentage"],
-        )
-        st.write(f"Current Blend: **{percentage}%**")
-
-        st.subheader("Blended Image")
-        if curr_image1_np is not None and curr_image2_np is not None:
-            blended_image_np = operations.blend_images(curr_image1_np, curr_image2_np, percentage)
-            st.image(
-                blended_image_np, caption=f"Blended Image ({percentage}%)", use_container_width=True
-            )
 
 
 if __name__ == "__main__":

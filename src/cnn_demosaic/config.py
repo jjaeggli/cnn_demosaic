@@ -25,7 +25,6 @@ class Config:
     raw_filename: str
     output_filename: str | None = None
     format: str | None = None
-    color_pipeline: str = COLOR_PIPELINE_DEFAULT
     color_weights: str | None = None
     demosaic_weights: str | None = None
     white_balance_weights: str | None = None
@@ -40,7 +39,6 @@ class Config:
     monochrome: bool = False
     fake: bool = False
 
-    VALID_COLOR_PIPELINES = (COLOR_PIPELINE_DEFAULT, COLOR_PIPELINE_MODEL)
     VALID_OUTPUT_COLORSPACES = (
         OUTPUT_COLORSPACE_SRGB,
         OUTPUT_COLORSPACE_REC2020,
@@ -81,34 +79,13 @@ class Config:
             raise ValueError(f"The input filename {self.raw_path.absolute()} is not a file!")
         if self.output_path.exists():
             raise ValueError(f"The output filename {self.output_path.absolute()} already exists!")
-        if self.color_pipeline not in self.VALID_COLOR_PIPELINES:
-            raise ValueError(
-                f"Invalid color pipeline [{self.color_pipeline}], "
-                + f"must be one of {self.VALID_COLOR_PIPELINES}"
-            )
         if self.output_colorspace not in self.VALID_OUTPUT_COLORSPACES:
             raise ValueError(
                 f"Invalid output color space [{self.output_colorspace}], "
                 + f"must be one of {self.VALID_OUTPUT_COLORSPACES}"
             )
-        # The learned color transform model was trained to output sRGB values.
-        if (
-            self.color_pipeline == COLOR_PIPELINE_MODEL
-            and self.output_colorspace != OUTPUT_COLORSPACE_SRGB
-        ):
-            raise ValueError(
-                f"The '{COLOR_PIPELINE_MODEL}' color pipeline only supports "
-                + f"'{OUTPUT_COLORSPACE_SRGB}' output color space, "
-                + f"got '{self.output_colorspace}'"
-            )
 
         validate_weights_path(self.demosaic_weights_path)
-
-        # The learned color pipeline requires the white balance and color
-        # transform models.
-        if self.color_pipeline == COLOR_PIPELINE_MODEL:
-            validate_weights_path(self.color_weights_path)
-            validate_weights_path(self.white_balance_weights_path)
 
     @property
     def output_gamma(self):
