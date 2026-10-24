@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import math
 from importlib import resources
 from typing import Protocol
 
@@ -11,8 +10,8 @@ import rawpy
 import tensorflow as tf
 from tensorflow import keras
 
-from cnn_demosaic import color_convert, color_model, config, exposure, model, transform
-from cnn_demosaic.color import ColorTransform, MonochromeTransform, WhiteBalance
+from cnn_demosaic import color_convert, config, exposure, model, transform
+from cnn_demosaic.color import MonochromeTransform
 from cnn_demosaic.demosaic import Demosaic
 from cnn_demosaic.types import MonochromeParameters
 from cnn_demosaic.util import path_parser
@@ -54,8 +53,6 @@ def process_raw(cfg: config.Config):
     with rawpy.imread(str(raw_path)) as raw_img:
         raw_img_arr = raw_img.raw_image.astype(np.float32).copy()
         raw_img_sizes = raw_img.sizes
-        camera_whitebalance = raw_img.camera_whitebalance
-        daylight_whitebalance = np.asarray(raw_img.daylight_whitebalance)
         color_params = color_convert.get_color_params(raw_img, cfg.output_colorspace)
         exposure_params = exposure.get_exposure_params(
             raw_img,
@@ -67,18 +64,12 @@ def process_raw(cfg: config.Config):
 
     logger.debug("Exposure parameters: %s", exposure_params)
 
-    loaded_model = None
-
-    # TODO(jjaeggli): Update this value to match the training input value range.
-    wb_scale = math.fsum(daylight_whitebalance) / math.fsum(camera_whitebalance)
-    wb_matrix = np.asarray(camera_whitebalance)[:3] * wb_scale
-
     demosaic_weights_path = cfg.demosaic_weights_path
 
-    # TODO(jjaeggli): Actually look at the sensor format to determine which sensor
-    #   format should be used.
+    # TODO(jjaeggli): Determine this from the sensor pattern in the raw file.
     is_xtrans = raw_path.suffix.lower() == RAF_SUFFIX
 
+    loaded_model = None
     if is_xtrans:
         if cfg.fake:
             loaded_model = model.create_fake_xtrans_model(demosaic_weights_path)
@@ -100,13 +91,13 @@ def process_raw(cfg: config.Config):
     output_arr = processor.demosaic(raw_img_arr)
 
     if cfg.post_process:
+        output_arr = color_convert.linearize(output_arr, color_params, norm_min, norm_max)
+
         if cfg.monochrome:
             output_arr = post_process_bw(output_arr, exposure_processor, cfg)
-        elif cfg.color_pipeline == config.COLOR_PIPELINE_MODEL:
-            output_arr = post_process(output_arr, wb_matrix, cfg)
         else:
-            output_arr = post_process_default(
-                output_arr, color_params, exposure_processor, norm_min, norm_max, cfg
+            output_arr = post_process_color(
+                output_arr, color_params, exposure_processor
             )
 
     output_arr = np.asarray(output_arr, dtype=np.float32)
@@ -118,27 +109,10 @@ def process_raw(cfg: config.Config):
     cfg.output_handler(output_arr)
 
 
-def post_process(img_arr, wb_matrix, cfg: config.Config):
-    wb_model = color_model.create_white_balance_model(cfg.white_balance_weights_path)
-    white_balance = WhiteBalance(wb_model)
-
-    ct_model = color_model.create_color_transform_model(cfg.color_weights_path)
-    color_transform = ColorTransform(ct_model)
-
-    logger.info("Performing model color post-processing.")
-    output_arr = white_balance.process(img_arr, wb_matrix)
-    output_arr = color_transform.process(output_arr)
-
-    return output_arr
-
-
-def post_process_default(
+def post_process_color(
     img_arr,
     color_params,
     exposure_processor: exposure.Exposure,
-    norm_min,
-    norm_max,
-    cfg: config.Config,
 ):
     """Performs color conversion using the camera color matrix and white balance.
 
@@ -152,8 +126,7 @@ def post_process_default(
         cfg: The processing configuration.
     """
     logger.info("Performing default color post-processing.")
-    output_arr = color_convert.linearize(img_arr, color_params, norm_min, norm_max)
-    output_arr = color_convert.white_balance(output_arr, color_params.wb_multipliers)
+    output_arr = color_convert.white_balance(img_arr, color_params.wb_multipliers)
     output_arr = color_convert.camera_to_rgb(output_arr, color_params)
     output_arr = exposure_processor.process(output_arr)
 
@@ -211,18 +184,6 @@ def main():
     parser.add_argument("-c", "--crop", required=False, default=False, action="store_true")
     parser.add_argument("-n", "--nopost", required=False, default=False, action="store_true")
     parser.add_argument("-m", "--monochrome", required=False, default=False, action="store_true")
-    parser.add_argument(
-        "-x",
-        "--color",
-        required=False,
-        default=config.COLOR_PIPELINE_DEFAULT,
-        choices=[config.COLOR_PIPELINE_DEFAULT, config.COLOR_PIPELINE_MODEL],
-        help=(
-            "The color processing pipeline to use. 'default' uses the camera "
-            + "color matrix from the raw file. 'model' uses a white balance and "
-            + "color transform models."
-        ),
-    )
     parser.add_argument(
         "-l",
         "--linear",
@@ -305,7 +266,6 @@ def main():
             post_process=post_process,
             monochrome=args.monochrome,
             fake=args.fake,
-            color_pipeline=args.color,
             output_linear=args.linear,
             output_colorspace=args.colorspace,
             exposure_offset_ev=args.exposure_offset,
